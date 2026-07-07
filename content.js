@@ -294,6 +294,9 @@
     const { element } = primary;
     const selectionLabel = describeReferences(references);
     targetEl.replaceChildren();
+    const badgeNode = document.createElement("span");
+    badgeNode.className = "urc-target-badge";
+    badgeNode.textContent = "当前选中";
     const titleNode = document.createElement("strong");
     titleNode.className = "urc-target-title";
     titleNode.textContent = selectionLabel.title;
@@ -305,7 +308,7 @@
     techNode.textContent = references.length === 1
       ? describeReference(primary).technical
       : "按选择顺序复制和对比";
-    targetEl.append(titleNode, detailNode, techNode);
+    targetEl.append(badgeNode, titleNode, detailNode, techNode);
     summaryEl.textContent = references.length === 1
       ? summarize(primary)
       : [

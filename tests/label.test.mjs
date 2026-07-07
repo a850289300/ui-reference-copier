@@ -39,6 +39,25 @@ const progress = describeReference(reference({
 }));
 assert.equal(progress.name, "进度条");
 
+const metricLine = describeReference(reference({
+  selector: "div.flex.justify-between.px-1",
+  domPath: "div.n-card > div.flex.justify-between.px-1",
+  text: "日同比 45,730%",
+  children: [
+    { text: "日同比 45,730%" }
+  ],
+  width: 282,
+  height: 30,
+  styles: {
+    box: {
+      display: "flex"
+    }
+  }
+}));
+assert.equal(metricLine.name, "指标行");
+assert.match(metricLine.detail, /文本：日同比 45,730%/);
+assert.equal(metricLine.technical, "div.flex.justify-between.px-1");
+
 const button = describeReference(reference({
   tag: "button",
   selector: "button.primary",

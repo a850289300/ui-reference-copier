@@ -3,6 +3,8 @@ const COMPONENT_HINTS = [
   [/n-card-header|card-header|header/i, "标题栏"],
   [/n-card|card/i, "卡片"],
   [/n-grid|grid|row|columns/i, "网格区域"],
+  [/justify-between|space-between/i, "指标行"],
+  [/flex|inline-flex/i, "布局行"],
   [/n-tag|tag|badge/i, "标签"],
   [/n-button|button|btn/i, "按钮"],
   [/table/i, "表格"],
@@ -55,6 +57,17 @@ function findShortText(element) {
   return isUsefulName(directText) ? directText : "";
 }
 
+function textKind(element) {
+  const text = cleanText(element.text);
+  const selector = cleanText(element.selector);
+  const display = cleanText(element.styles?.box?.display);
+  const isFlexLine = /flex|justify-between|space-between/i.test(`${selector} ${display}`);
+  if (isFlexLine && /同比|环比|访问|销售|订单|成交|转化|金额|数量|率/.test(text)) {
+    return "指标行";
+  }
+  return "";
+}
+
 function kindFromReference(reference) {
   const element = reference.element;
   const tagKind = TAG_KIND[String(element.tag ?? "").toLowerCase()];
@@ -62,15 +75,21 @@ function kindFromReference(reference) {
     return tagKind;
   }
 
-  const haystack = [
+  const inferredTextKind = textKind(element);
+  if (inferredTextKind) {
+    return inferredTextKind;
+  }
+
+  const directHaystack = [
     element.selector,
-    element.domPath,
     element.attributes?.role,
     element.attributes?.ariaLabel,
-    element.tag
+    element.tag,
+    element.styles?.box?.display,
+    element.styles?.layout?.justifyContent
   ].filter(Boolean).join(" ");
 
-  const hint = COMPONENT_HINTS.find(([pattern]) => pattern.test(haystack));
+  const hint = COMPONENT_HINTS.find(([pattern]) => pattern.test(directHaystack));
   if (hint) {
     return hint[1];
   }
@@ -89,19 +108,24 @@ function kindFromReference(reference) {
   return tagKind ?? "元素";
 }
 
+function shouldUseTextInTitle(kind) {
+  return !["指标行", "布局行", "网格区域", "图表区域", "表单区域", "导航区域"].includes(kind);
+}
+
 export function describeReference(reference) {
   const element = reference.element;
   const kind = kindFromReference(reference);
   const text = findShortText(element);
-  const name = text && !kind.includes(text) ? `${text}${kind}` : kind;
+  const name = text && shouldUseTextInTitle(kind) && !kind.includes(text) ? `${text}${kind}` : kind;
   const rect = element.rect ?? {};
   const childCount = element.children?.length ?? 0;
+  const textDetail = text ? `文本：${text}；` : "";
 
   return {
     name,
     kind,
     text,
-    detail: `${Math.round(rect.width ?? 0)} x ${Math.round(rect.height ?? 0)}，采样 ${childCount} 个子元素`,
+    detail: `${textDetail}${Math.round(rect.width ?? 0)} x ${Math.round(rect.height ?? 0)}，采样 ${childCount} 个子元素`,
     technical: element.selector || element.domPath || element.tag || "unknown"
   };
 }
