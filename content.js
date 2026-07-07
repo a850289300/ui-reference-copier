@@ -8,12 +8,14 @@
     { extractReferenceFromElement },
     { buildMultiAiPrompt, buildMultiJson },
     { buildDiffPrompt, compareReferenceSets },
-    { resolveSelectableElement, selectableParent }
+    { resolveSelectableElement, selectableParent },
+    { describeReference, describeReferences }
   ] = await Promise.all([
     import(chrome.runtime.getURL("collector.mjs")),
     import(chrome.runtime.getURL("prompt.mjs")),
     import(chrome.runtime.getURL("diff.mjs")),
-    import(chrome.runtime.getURL("selection.mjs"))
+    import(chrome.runtime.getURL("selection.mjs")),
+    import(chrome.runtime.getURL("label.mjs"))
   ]);
 
   const BASELINE_KEY = "ui-reference-copier.baseline";
@@ -56,7 +58,7 @@
       <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前目标</p>
-          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>上选父级</button>
+          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
         </div>
         <div class="urc-target">还没有选择元素</div>
       </section>
@@ -241,7 +243,8 @@
     }
 
     const page = state.baseline.page;
-    baselineStatus.textContent = `已保存 ${state.baseline.references.length} 个参考元素`;
+    const baselineLabel = describeReferences(state.baseline.references);
+    baselineStatus.textContent = `已保存：${baselineLabel.title}`;
     baselineMeta.textContent = page?.url ?? "(未知页面)";
     baselinePill.textContent = state.lastDiff ? "已对比" : "已保存";
     baselinePill.dataset.baselineState = state.lastDiff ? "compared" : "saved";
@@ -289,12 +292,20 @@
 
     const primary = references[references.length - 1];
     const { element } = primary;
+    const selectionLabel = describeReferences(references);
     targetEl.replaceChildren();
-    const countNode = document.createElement("strong");
-    countNode.textContent = `已选择 ${references.length} 个元素`;
-    const summaryNode = document.createElement("span");
-    summaryNode.textContent = `${element.selector}${element.text ? ` · ${element.text}` : ""}`;
-    targetEl.append(countNode, summaryNode);
+    const titleNode = document.createElement("strong");
+    titleNode.className = "urc-target-title";
+    titleNode.textContent = selectionLabel.title;
+    const detailNode = document.createElement("span");
+    detailNode.className = "urc-target-detail";
+    detailNode.textContent = selectionLabel.detail;
+    const techNode = document.createElement("span");
+    techNode.className = "urc-target-tech";
+    techNode.textContent = references.length === 1
+      ? describeReference(primary).technical
+      : "按选择顺序复制和对比";
+    targetEl.append(titleNode, detailNode, techNode);
     summaryEl.textContent = references.length === 1
       ? summarize(primary)
       : [
@@ -303,7 +314,8 @@
           "",
           ...references.map((item, index) => {
             const rect = item.element.rect;
-            return `${index + 1}. ${item.element.selector} | ${rect.width} x ${rect.height} @ (${rect.x}, ${rect.y}) | ${item.element.text || item.element.tag}`;
+            const label = describeReference(item);
+            return `${index + 1}. ${label.name} | ${rect.width} x ${rect.height} @ (${rect.x}, ${rect.y}) | ${label.technical}`;
           })
         ].join("\n");
     copyPromptButton.disabled = false;
@@ -494,7 +506,8 @@
         return;
       }
       renderSelection();
-      setFeedback("已切换到父级元素。");
+      const label = describeReference(state.references[state.references.length - 1]);
+      setFeedback(`已切换到父级：${label.name}`);
       return;
     }
 

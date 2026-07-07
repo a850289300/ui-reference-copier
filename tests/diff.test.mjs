@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildDiffPrompt, compareReferenceSets } from "../diff.mjs";
+import { buildDiffPrompt, compareReferenceSets, summarizeDiff } from "../diff.mjs";
 
 function makeReference(selector, rect, overrides = {}) {
   return {
@@ -154,8 +154,12 @@ assert.equal(diff.pairs[0].children[0].styles.transitionDuration.baseline, "0.3s
 assert.equal(diff.pairs[0].children[0].styles["var.--n-fill-color"].current, "rgb(59, 130, 246)");
 
 const prompt = buildDiffPrompt(diff);
+const summary = summarizeDiff(diff);
+assert.ok(summary.length > 0);
+assert.match(summary.join("\n"), /子元素 1: width: 参考 auto \/ 当前 48px/);
 assert.match(prompt, /参考页/);
 assert.match(prompt, /当前实现页/);
+assert.match(prompt, /关键差异摘要/);
 assert.match(prompt, /font\.size: 参考 16px \/ 当前 14px/);
 assert.match(prompt, /子元素差异/);
 assert.match(prompt, /span\.label/);

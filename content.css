@@ -193,7 +193,7 @@
 #ui-reference-copier-root .urc-target {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-height: 50px;
   padding: 9px 10px;
   border: 1px solid rgba(17, 24, 39, 0.1);
@@ -204,7 +204,22 @@
 
 #ui-reference-copier-root .urc-target strong {
   color: #111827;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+#ui-reference-copier-root .urc-target-detail {
+  margin: 0;
+  color: #4b5563;
   font-size: 12px;
+  line-height: 1.4;
+}
+
+#ui-reference-copier-root .urc-target-tech {
+  margin: 0;
+  color: #6b7280;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
   line-height: 1.35;
 }
 

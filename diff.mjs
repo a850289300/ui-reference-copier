@@ -237,6 +237,71 @@ function diffChildRects(baselineChild, currentChild) {
   return diffRect(baselineChild.relativeRect, currentChild.relativeRect);
 }
 
+function absoluteDelta(value) {
+  return Math.abs(Number(value?.delta ?? 0));
+}
+
+function scoreStyleField(name) {
+  if (/width|height|padding|margin|gap|font\.size|fontSize|lineHeight|borderRadius|radius/i.test(name)) {
+    return 90;
+  }
+  if (/color|background|shadow|border/i.test(name)) {
+    return 75;
+  }
+  if (/display|align|justify|grid|flex|position/i.test(name)) {
+    return 70;
+  }
+  return 45;
+}
+
+function rectSummaryItems(rect, label, context) {
+  return ["width", "height", "x", "y"]
+    .filter((name) => absoluteDelta(rect?.[name]) > 0)
+    .map((name) => ({
+      score: absoluteDelta(rect[name]) + (name === "width" || name === "height" ? 85 : 55),
+      text: `${context}${label} ${name}: 参考 ${rect[name].baseline}px / 当前 ${rect[name].current}px / 差异 ${rect[name].delta > 0 ? "+" : ""}${rect[name].delta}px`
+    }));
+}
+
+function styleSummaryItems(styles, context) {
+  return Object.entries(styles ?? {}).map(([name, value]) => ({
+    score: scoreStyleField(name),
+    text: `${context}${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`
+  }));
+}
+
+function childSummaryItems(children = [], pairIndex) {
+  return children.flatMap((child) => {
+    const context = `元素 ${pairIndex} 的子元素 ${child.index}: `;
+    if (child.missing) {
+      return [{
+        score: 120,
+        text: `${context}${child.baselineSelector} 在当前实现中缺失`
+      }];
+    }
+    return [
+      ...rectSummaryItems(child.rect, "位置尺寸", context),
+      ...styleSummaryItems(child.styles, context)
+    ];
+  });
+}
+
+export function summarizeDiff(diff, limit = 10) {
+  const items = [
+    ...rectSummaryItems(diff.bounds, "整体边界", ""),
+    ...diff.pairs.flatMap((pair) => [
+      ...rectSummaryItems(pair.rect, "位置尺寸", `元素 ${pair.index}: `),
+      ...styleSummaryItems(pair.styles, `元素 ${pair.index}: `),
+      ...childSummaryItems(pair.children, pair.index)
+    ])
+  ];
+
+  return items
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item, index) => `${index + 1}. ${item.text}`);
+}
+
 function diffChildren(baseline, current) {
   const baselineChildren = baseline.element.children ?? [];
   const currentChildren = current.element.children ?? [];
@@ -378,6 +443,7 @@ function formatChildDiffs(children = []) {
 }
 
 export function buildDiffPrompt(diff) {
+  const summary = summarizeDiff(diff);
   return [
     "请根据这些差异调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
     "",
@@ -385,6 +451,9 @@ export function buildDiffPrompt(diff) {
     `参考页: ${diff.pages.baseline?.url ?? "(未知)"}`,
     `当前实现页: ${diff.pages.current?.url ?? "(未知)"}`,
     `对比元素数量: 参考 ${diff.count.baseline} / 当前 ${diff.count.current} / 已配对 ${diff.count.compared}`,
+    "",
+    "## 关键差异摘要",
+    ...(summary.length > 0 ? summary : ["未发现明显关键差异。"]),
     "",
     "## 整体边界差异",
     formatBounds(diff.bounds),
