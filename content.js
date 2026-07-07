@@ -9,16 +9,19 @@
     { buildMultiAiPrompt, buildMultiJson },
     { buildDiffPrompt, compareReferenceSets },
     { resolveSelectableElement, selectableParent },
-    { describeReference, describeReferences }
+    { describeReference, describeReferences },
+    { attachCurrentToGroup, buildGroupedDiffPrompt, compareReferenceGroups, createReferenceGroup }
   ] = await Promise.all([
     import(chrome.runtime.getURL("collector.mjs")),
     import(chrome.runtime.getURL("prompt.mjs")),
     import(chrome.runtime.getURL("diff.mjs")),
     import(chrome.runtime.getURL("selection.mjs")),
-    import(chrome.runtime.getURL("label.mjs"))
+    import(chrome.runtime.getURL("label.mjs")),
+    import(chrome.runtime.getURL("groups.mjs"))
   ]);
 
   const BASELINE_KEY = "ui-reference-copier.baseline";
+  const GROUPS_KEY = "ui-reference-copier.groups";
   const SETTINGS_KEY = "ui-reference-copier.settings";
   const CHILD_LIMITS = {
     compact: 20,
@@ -32,6 +35,9 @@
     selected: [],
     references: [],
     baseline: null,
+    groups: [],
+    selectedGroupId: "",
+    lastGroupedDiff: null,
     lastDiff: null,
     lastCopied: "",
     panelDrag: null,
@@ -99,6 +105,26 @@
           <button class="urc-primary" type="button" data-action="copy-diff" disabled>复制差异给 AI</button>
         </div>
       </section>
+      <section class="urc-section">
+        <div class="urc-section-heading">
+          <p class="urc-label">多组对比</p>
+          <span class="urc-status-pill" data-group-state="empty">0 组</span>
+        </div>
+        <div class="urc-group-card">
+          <div class="urc-group-status">还没有参考组</div>
+          <div class="urc-group-meta">适合分别对比访问量卡片、销售额卡片、订单量卡片等多个区域。</div>
+          <select class="urc-select urc-group-select" data-group-select hidden></select>
+        </div>
+        <div class="urc-button-row">
+          <button class="urc-secondary" type="button" data-action="add-reference-group" disabled>保存新参考组</button>
+          <button class="urc-secondary" type="button" data-action="match-current-group" disabled>匹配当前组</button>
+        </div>
+        <div class="urc-button-row">
+          <button class="urc-secondary" type="button" data-action="compare-groups" disabled>对比全部组</button>
+          <button class="urc-primary" type="button" data-action="copy-group-diff" disabled>复制全部差异</button>
+        </div>
+        <button class="urc-text-button" type="button" data-action="clear-groups">清空所有组</button>
+      </section>
     </aside>
     <div class="urc-toast" role="status" hidden></div>
   `;
@@ -119,6 +145,14 @@
   const setBaselineButton = root.querySelector("[data-action='set-baseline']");
   const compareBaselineButton = root.querySelector("[data-action='compare-baseline']");
   const copyDiffButton = root.querySelector("[data-action='copy-diff']");
+  const groupStatus = root.querySelector(".urc-group-status");
+  const groupMeta = root.querySelector(".urc-group-meta");
+  const groupPill = root.querySelector("[data-group-state]");
+  const groupSelect = root.querySelector("[data-group-select]");
+  const addReferenceGroupButton = root.querySelector("[data-action='add-reference-group']");
+  const matchCurrentGroupButton = root.querySelector("[data-action='match-current-group']");
+  const compareGroupsButton = root.querySelector("[data-action='compare-groups']");
+  const copyGroupDiffButton = root.querySelector("[data-action='copy-group-diff']");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const selectParentButton = root.querySelector("[data-action='select-parent']");
 
@@ -192,6 +226,13 @@
     renderBaselineStatus();
   }
 
+  async function loadGroups() {
+    const result = await chrome.storage.local.get(GROUPS_KEY);
+    state.groups = result[GROUPS_KEY] ?? [];
+    state.selectedGroupId = state.selectedGroupId || state.groups[0]?.id || "";
+    renderGroupsStatus();
+  }
+
   async function loadSettings() {
     const result = await chrome.storage.local.get(SETTINGS_KEY);
     state.settings = {
@@ -224,6 +265,45 @@
     renderBaselineStatus();
   }
 
+  async function saveGroups(groups) {
+    state.groups = groups;
+    if (!state.groups.some((group) => group.id === state.selectedGroupId)) {
+      state.selectedGroupId = state.groups[0]?.id || "";
+    }
+    await chrome.storage.local.set({ [GROUPS_KEY]: state.groups });
+    state.lastGroupedDiff = null;
+    renderGroupsStatus();
+  }
+
+  async function addReferenceGroup() {
+    const label = describeReferences(state.references);
+    const group = createReferenceGroup(state.references, {
+      name: label.title
+    });
+    state.selectedGroupId = group.id;
+    await saveGroups([...state.groups, group]);
+    return group;
+  }
+
+  async function matchCurrentGroup() {
+    const group = state.groups.find((item) => item.id === state.selectedGroupId);
+    if (!group) {
+      return null;
+    }
+    const nextGroup = attachCurrentToGroup(group, state.references);
+    await saveGroups(state.groups.map((item) => item.id === group.id ? nextGroup : item));
+    state.selectedGroupId = nextGroup.id;
+    return nextGroup;
+  }
+
+  async function clearGroups() {
+    await chrome.storage.local.remove(GROUPS_KEY);
+    state.groups = [];
+    state.selectedGroupId = "";
+    state.lastGroupedDiff = null;
+    renderGroupsStatus();
+  }
+
   async function clearBaseline() {
     await chrome.storage.local.remove(BASELINE_KEY);
     state.baseline = null;
@@ -250,6 +330,39 @@
     baselinePill.dataset.baselineState = state.lastDiff ? "compared" : "saved";
     compareBaselineButton.disabled = state.references.length === 0;
     copyDiffButton.disabled = !state.lastDiff;
+  }
+
+  function renderGroupsStatus() {
+    const total = state.groups.length;
+    const compared = state.groups.filter((group) => group.diff).length;
+    groupPill.textContent = total === 0 ? "0 组" : `${compared}/${total}`;
+    groupPill.dataset.groupState = compared > 0 ? "compared" : total > 0 ? "saved" : "empty";
+    groupSelect.hidden = total === 0;
+    groupSelect.replaceChildren(...state.groups.map((group, index) => {
+      const option = document.createElement("option");
+      option.value = group.id;
+      option.textContent = `${index + 1}. ${group.name}${group.diff ? " · 已匹配" : ""}`;
+      return option;
+    }));
+    if (state.selectedGroupId) {
+      groupSelect.value = state.selectedGroupId;
+    }
+
+    if (total === 0) {
+      groupStatus.textContent = "还没有参考组";
+      groupMeta.textContent = "适合分别对比访问量卡片、销售额卡片、订单量卡片等多个区域。";
+    } else {
+      const selected = state.groups.find((group) => group.id === state.selectedGroupId) ?? state.groups[0];
+      groupStatus.textContent = `当前组：${selected.name}`;
+      groupMeta.textContent = selected.diff
+        ? `已匹配当前实现：参考 ${selected.references.length} 个 / 当前 ${selected.currentReferences.length} 个`
+        : `等待匹配当前实现：参考 ${selected.references.length} 个元素`;
+    }
+
+    addReferenceGroupButton.disabled = state.references.length === 0;
+    matchCurrentGroupButton.disabled = state.references.length === 0 || total === 0;
+    compareGroupsButton.disabled = compared === 0;
+    copyGroupDiffButton.disabled = !state.lastGroupedDiff;
   }
 
   function setFeedback(message, kind = "success") {
@@ -284,9 +397,12 @@
       copyFullStyleButton.disabled = true;
       copyJsonButton.disabled = true;
       setBaselineButton.disabled = true;
+      addReferenceGroupButton.disabled = true;
       selectParentButton.disabled = true;
       compareBaselineButton.disabled = true;
       copyDiffButton.disabled = true;
+      matchCurrentGroupButton.disabled = state.groups.length === 0;
+      renderGroupsStatus();
       return;
     }
 
@@ -325,10 +441,13 @@
     copyFullStyleButton.disabled = false;
     copyJsonButton.disabled = false;
     setBaselineButton.disabled = false;
+    addReferenceGroupButton.disabled = false;
+    matchCurrentGroupButton.disabled = state.groups.length === 0;
     selectParentButton.disabled = !state.selected.some((element) => selectableParent(element));
     compareBaselineButton.disabled = !state.baseline;
     copyDiffButton.disabled = !state.lastDiff;
     renderBaselineStatus();
+    renderGroupsStatus();
   }
 
   function setSelection(element, additive) {
@@ -339,6 +458,8 @@
     if (!additive) {
       state.selected = [element];
       state.references = [extractReferenceFromElement(element, options)];
+      state.lastDiff = null;
+      state.lastGroupedDiff = null;
       return;
     }
 
@@ -346,11 +467,15 @@
     if (existingIndex >= 0) {
       state.selected.splice(existingIndex, 1);
       state.references.splice(existingIndex, 1);
+      state.lastDiff = null;
+      state.lastGroupedDiff = null;
       return;
     }
 
     state.selected.push(element);
     state.references.push(extractReferenceFromElement(element, options));
+    state.lastDiff = null;
+    state.lastGroupedDiff = null;
   }
 
   function replaceSelectionAt(index, element) {
@@ -360,6 +485,7 @@
     state.selected[index] = element;
     state.references[index] = extractReferenceFromElement(element, options);
     state.lastDiff = null;
+    state.lastGroupedDiff = null;
   }
 
   function selectParentForCurrentSelection() {
@@ -489,6 +615,16 @@
       return;
     }
 
+    if (action === "clear-groups") {
+      try {
+        await clearGroups();
+        setFeedback("已清空所有参考组。");
+      } catch (error) {
+        setFeedback(`清空失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
     if (action === "copy-diff") {
       if (!state.lastDiff) {
         setFeedback("请先对比参考。", "error");
@@ -497,6 +633,20 @@
       try {
         await copyText(buildDiffPrompt(state.lastDiff));
         setFeedback("已复制差异提示词到剪贴板。");
+      } catch (error) {
+        setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "copy-group-diff") {
+      if (!state.lastGroupedDiff) {
+        setFeedback("请先对比全部组。", "error");
+        return;
+      }
+      try {
+        await copyText(buildGroupedDiffPrompt(state.lastGroupedDiff));
+        setFeedback("已复制多组差异提示词到剪贴板。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }
@@ -536,6 +686,18 @@
         await saveBaseline();
         setFeedback(`已保存 ${state.references.length} 个参考元素，可切换页面对比。`);
       }
+      if (action === "add-reference-group") {
+        const group = await addReferenceGroup();
+        setFeedback(`已保存参考组：${group.name}`);
+      }
+      if (action === "match-current-group") {
+        const group = await matchCurrentGroup();
+        if (!group) {
+          setFeedback("请先保存一个参考组。", "error");
+          return;
+        }
+        setFeedback(`已匹配当前组：${group.name}`);
+      }
       if (action === "compare-baseline") {
         if (!state.baseline) {
           setFeedback("请先设置参考。", "error");
@@ -546,9 +708,21 @@
         summaryEl.textContent = buildDiffPrompt(state.lastDiff);
         setFeedback("已生成差异报告，可复制给 AI。");
       }
+      if (action === "compare-groups") {
+        state.lastGroupedDiff = compareReferenceGroups(state.groups);
+        copyGroupDiffButton.disabled = false;
+        summaryEl.textContent = buildGroupedDiffPrompt(state.lastGroupedDiff);
+        renderGroupsStatus();
+        setFeedback("已生成多组差异报告，可复制给 AI。");
+      }
     } catch (error) {
       setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
     }
+  });
+
+  groupSelect.addEventListener("change", () => {
+    state.selectedGroupId = groupSelect.value;
+    renderGroupsStatus();
   });
 
   childDepthSelect.addEventListener("change", () => {
@@ -615,6 +789,14 @@
       state.lastDiff = null;
       renderBaselineStatus();
     }
+    if (changes[GROUPS_KEY]) {
+      state.groups = changes[GROUPS_KEY].newValue ?? [];
+      if (!state.groups.some((group) => group.id === state.selectedGroupId)) {
+        state.selectedGroupId = state.groups[0]?.id || "";
+      }
+      state.lastGroupedDiff = null;
+      renderGroupsStatus();
+    }
     if (changes[SETTINGS_KEY]) {
       state.settings = {
         ...state.settings,
@@ -626,5 +808,5 @@
     }
   });
 
-  void Promise.all([loadBaseline(), loadSettings()]);
+  void Promise.all([loadBaseline(), loadGroups(), loadSettings()]);
 })();

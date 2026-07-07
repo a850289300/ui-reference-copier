@@ -3,5 +3,6 @@ import "./prompt.test.mjs";
 import "./diff.test.mjs";
 import "./selection.test.mjs";
 import "./label.test.mjs";
+import "./groups.test.mjs";
 
 console.log("All tests passed");
