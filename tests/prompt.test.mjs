@@ -1,0 +1,160 @@
+import assert from "node:assert/strict";
+import { buildAiPrompt, buildMultiAiPrompt } from "../prompt.mjs";
+
+const reference = {
+  page: {
+    url: "https://example.com/prototype",
+    title: "Prototype",
+    viewport: {
+      width: 1440,
+      height: 900,
+      devicePixelRatio: 2
+    }
+  },
+  element: {
+    tag: "button",
+    text: "Start now",
+    selector: "button.primary",
+    domPath: "html > body > main > button.primary",
+    rect: {
+      x: 120,
+      y: 240,
+      width: 128,
+      height: 44
+    },
+    attributes: {
+      role: "button",
+      ariaLabel: "Start now"
+    },
+    outerHTML: "<button class=\"primary\">Start now</button>",
+    styles: {
+      font: {
+        family: "Inter, sans-serif",
+        size: "16px",
+        weight: "600",
+        lineHeight: "24px",
+        letterSpacing: "0px"
+      },
+      color: {
+        text: "rgb(255, 255, 255)",
+        background: "rgb(37, 99, 235)"
+      },
+      box: {
+        display: "inline-flex",
+        padding: "10px 18px",
+        margin: "0px",
+        border: "0px none rgb(255, 255, 255)",
+        borderRadius: "8px",
+        boxShadow: "rgba(0, 0, 0, 0.2) 0px 8px 24px"
+      },
+      layout: {
+        position: "relative",
+        gap: "8px",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    },
+    parent: {
+      selector: "main.hero",
+      display: "flex",
+      gap: "24px",
+      padding: "64px"
+    },
+    children: [
+      {
+        selector: "span.label",
+        tag: "span",
+        text: "Start now",
+        relativeRect: { x: 12, y: 10, width: 88, height: 20 },
+        styles: {
+          width: "auto",
+          minWidth: "0px",
+          height: "20px",
+          fontSize: "16px",
+          fontWeight: "600",
+          lineHeight: "20px",
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          textOverflow: "ellipsis",
+          color: "rgb(255, 255, 255)",
+          background: "rgba(0, 0, 0, 0)",
+          backgroundImage: "linear-gradient(90deg, red, blue)",
+          backgroundSize: "200% 100%",
+          backgroundPosition: "0% 50%",
+          display: "inline",
+          padding: "0px 12px",
+          margin: "0px",
+          borderRadius: "0px",
+          boxShadow: "none",
+          boxSizing: "border-box",
+          position: "relative",
+          overflow: "hidden",
+          transform: "translateX(0px)",
+          transformOrigin: "0px 10px",
+          transitionDuration: "0.3s",
+          transitionTimingFunction: "ease",
+          transitionProperty: "max-width",
+          objectFit: "cover",
+          aspectRatio: "16 / 9"
+        },
+        styleVars: {
+          "--n-fill-color": "rgb(32, 128, 240)",
+          "--n-rail-color": "rgb(235, 235, 235)"
+        }
+      }
+    ],
+    ancestorTrail: ["main.hero", "body"],
+    fullComputedStyle: {
+      "font-size": "16px",
+      "font-weight": "600",
+      "background-color": "rgb(37, 99, 235)",
+      "border-radius": "8px",
+      padding: "10px 18px",
+      display: "inline-flex"
+    }
+  }
+};
+
+const prompt = buildAiPrompt(reference);
+
+assert.match(prompt, /1:1/);
+assert.match(prompt, /https:\/\/example\.com\/prototype/);
+assert.match(prompt, /button\.primary/);
+assert.match(prompt, /128 x 44/);
+assert.match(prompt, /Inter, sans-serif/);
+assert.match(prompt, /rgb\(37, 99, 235\)/);
+assert.match(prompt, /关键子元素采样/);
+assert.match(prompt, /span\.label/);
+assert.match(prompt, /width auto; min-width 0px; height 20px/);
+assert.match(prompt, /padding 0px 12px/);
+assert.match(prompt, /Text: .*white-space nowrap; text-overflow ellipsis/);
+assert.match(prompt, /Visual: .*background-image linear-gradient\(90deg, red, blue\)/);
+assert.match(prompt, /Layout\/Motion: position relative; overflow hidden; transform translateX\(0px\)/);
+assert.match(prompt, /Media: object-fit cover; aspect-ratio 16 \/ 9/);
+assert.match(prompt, /Component vars: --n-fill-color rgb\(32, 128, 240\); --n-rail-color rgb\(235, 235, 235\)/);
+assert.match(prompt, /不要盲目复制无关 inline style/);
+assert.doesNotMatch(prompt, /结构化 JSON/);
+assert.doesNotMatch(prompt, /"capturedAt"/);
+
+const fullPrompt = buildAiPrompt(reference, "Codex", { includeFullComputedStyle: true });
+assert.match(fullPrompt, /完整 computed CSS/);
+assert.match(fullPrompt, /font-size: 16px;/);
+assert.doesNotMatch(fullPrompt, /结构化 JSON/);
+
+const secondReference = structuredClone(reference);
+secondReference.element.selector = "h1.title";
+secondReference.element.tag = "h1";
+secondReference.element.text = "Welcome";
+secondReference.element.rect = {
+  x: 120,
+  y: 160,
+  width: 320,
+  height: 52
+};
+
+const multiPrompt = buildMultiAiPrompt([reference, secondReference]);
+assert.match(multiPrompt, /本次选中了 2 个参考元素/);
+assert.match(multiPrompt, /整体边界: 120, 160, 320 x 124/);
+assert.match(multiPrompt, /1\. button\.primary/);
+assert.match(multiPrompt, /2\. h1\.title/);
+assert.doesNotMatch(multiPrompt, /结构化 JSON/);

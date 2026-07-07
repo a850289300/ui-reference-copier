@@ -1,0 +1,402 @@
+const STYLE_FIELDS = [
+  ["font.family", (item) => item.element.styles.font.family],
+  ["font.size", (item) => item.element.styles.font.size],
+  ["font.weight", (item) => item.element.styles.font.weight],
+  ["font.lineHeight", (item) => item.element.styles.font.lineHeight],
+  ["font.letterSpacing", (item) => item.element.styles.font.letterSpacing],
+  ["color.text", (item) => item.element.styles.color.text],
+  ["color.background", (item) => item.element.styles.color.background],
+  ["box.display", (item) => item.element.styles.box.display],
+  ["box.padding", (item) => item.element.styles.box.padding],
+  ["box.margin", (item) => item.element.styles.box.margin],
+  ["box.border", (item) => item.element.styles.box.border],
+  ["box.borderRadius", (item) => item.element.styles.box.borderRadius],
+  ["box.boxShadow", (item) => item.element.styles.box.boxShadow],
+  ["layout.gap", (item) => item.element.styles.layout.gap],
+  ["layout.alignItems", (item) => item.element.styles.layout.alignItems],
+  ["layout.justifyContent", (item) => item.element.styles.layout.justifyContent],
+  ["parent.display", (item) => item.element.parent?.display],
+  ["parent.gap", (item) => item.element.parent?.gap],
+  ["parent.padding", (item) => item.element.parent?.padding]
+];
+const CHILD_STYLE_FIELDS = [
+  "fontFamily",
+  "width",
+  "minWidth",
+  "maxWidth",
+  "height",
+  "minHeight",
+  "maxHeight",
+  "fontSize",
+  "fontWeight",
+  "lineHeight",
+  "letterSpacing",
+  "textAlign",
+  "textTransform",
+  "textDecorationLine",
+  "whiteSpace",
+  "wordBreak",
+  "textOverflow",
+  "color",
+  "background",
+  "backgroundImage",
+  "backgroundSize",
+  "backgroundPosition",
+  "opacity",
+  "display",
+  "padding",
+  "margin",
+  "border",
+  "outline",
+  "borderRadius",
+  "boxShadow",
+  "boxSizing",
+  "position",
+  "inset",
+  "zIndex",
+  "overflow",
+  "overflowX",
+  "overflowY",
+  "transform",
+  "transformOrigin",
+  "transitionDuration",
+  "transitionTimingFunction",
+  "transitionProperty",
+  "gap",
+  "rowGap",
+  "columnGap",
+  "alignItems",
+  "justifyContent",
+  "flexDirection",
+  "flexWrap",
+  "gridTemplateColumns",
+  "gridTemplateRows",
+  "objectFit",
+  "objectPosition",
+  "aspectRatio"
+];
+
+function round(value) {
+  return Math.round(Number(value) * 100) / 100;
+}
+
+function unionRect(references) {
+  if (references.length === 0) {
+    return null;
+  }
+
+  const rects = references.map((item) => item.element.rect);
+  const left = Math.min(...rects.map((rect) => rect.left ?? rect.x));
+  const top = Math.min(...rects.map((rect) => rect.top ?? rect.y));
+  const right = Math.max(...rects.map((rect) => rect.right ?? rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom ?? rect.y + rect.height));
+
+  return {
+    x: round(left),
+    y: round(top),
+    width: round(right - left),
+    height: round(bottom - top),
+    right: round(right),
+    bottom: round(bottom)
+  };
+}
+
+function diffNumber(baseline, current) {
+  return {
+    baseline,
+    current,
+    delta: round(current - baseline)
+  };
+}
+
+function diffRect(baseline, current) {
+  return {
+    x: diffNumber(baseline.x, current.x),
+    y: diffNumber(baseline.y, current.y),
+    width: diffNumber(baseline.width, current.width),
+    height: diffNumber(baseline.height, current.height)
+  };
+}
+
+function readField(item, reader) {
+  const value = reader(item);
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function diffStyles(baseline, current) {
+  const result = {};
+
+  STYLE_FIELDS.forEach(([name, reader]) => {
+    const baselineValue = readField(baseline, reader);
+    const currentValue = readField(current, reader);
+    if (baselineValue !== currentValue) {
+      result[name] = {
+        baseline: baselineValue,
+        current: currentValue
+      };
+    }
+  });
+
+  return result;
+}
+
+function normalizedText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function rectDistance(a, b) {
+  return Math.abs((a?.x ?? 0) - (b?.x ?? 0)) + Math.abs((a?.y ?? 0) - (b?.y ?? 0));
+}
+
+function sizeDistance(a, b) {
+  return Math.abs((a?.width ?? 0) - (b?.width ?? 0)) + Math.abs((a?.height ?? 0) - (b?.height ?? 0));
+}
+
+function childMatchScore(baselineChild, currentChild, fallbackIndex, currentIndex) {
+  let score = 0;
+  const baselineText = normalizedText(baselineChild.text);
+  const currentText = normalizedText(currentChild.text);
+
+  if (baselineChild.signature === currentChild.signature) {
+    score += 120;
+  }
+  if (baselineText && baselineText === currentText) {
+    score += 90;
+  } else if (baselineText && currentText && (baselineText.includes(currentText) || currentText.includes(baselineText))) {
+    score += 45;
+  }
+  if (baselineChild.tag && baselineChild.tag === currentChild.tag) {
+    score += 25;
+  }
+  if (baselineChild.attributes?.role && baselineChild.attributes.role === currentChild.attributes?.role) {
+    score += 25;
+  }
+  if (baselineChild.attributes?.ariaLabel && baselineChild.attributes.ariaLabel === currentChild.attributes?.ariaLabel) {
+    score += 35;
+  }
+
+  score -= Math.min(60, rectDistance(baselineChild.relativeRect, currentChild.relativeRect) * 0.35);
+  score -= Math.min(35, sizeDistance(baselineChild.relativeRect, currentChild.relativeRect) * 0.2);
+  score -= Math.abs(fallbackIndex - currentIndex) * 3;
+
+  return score;
+}
+
+function findCurrentChild(baselineChild, currentChildren, usedIndexes, fallbackIndex) {
+  let bestIndex = -1;
+  let bestScore = -Infinity;
+
+  currentChildren.forEach((child, index) => {
+    if (usedIndexes.has(index)) {
+      return;
+    }
+    const score = childMatchScore(baselineChild, child, fallbackIndex, index);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  if (bestIndex < 0 || bestScore < -20) {
+    return null;
+  }
+
+  usedIndexes.add(bestIndex);
+  return currentChildren[bestIndex];
+}
+
+function diffChildStyles(baselineChild, currentChild) {
+  const result = {};
+  CHILD_STYLE_FIELDS.forEach((name) => {
+    const baselineValue = baselineChild.styles?.[name] ?? "";
+    const currentValue = currentChild.styles?.[name] ?? "";
+    if (baselineValue !== currentValue) {
+      result[name] = {
+        baseline: baselineValue,
+        current: currentValue
+      };
+    }
+  });
+  Array.from(new Set([
+    ...Object.keys(baselineChild.styleVars ?? {}),
+    ...Object.keys(currentChild.styleVars ?? {})
+  ])).forEach((name) => {
+    const baselineValue = baselineChild.styleVars?.[name] ?? "";
+    const currentValue = currentChild.styleVars?.[name] ?? "";
+    if (baselineValue !== currentValue) {
+      result[`var.${name}`] = {
+        baseline: baselineValue,
+        current: currentValue
+      };
+    }
+  });
+  return result;
+}
+
+function diffChildRects(baselineChild, currentChild) {
+  return diffRect(baselineChild.relativeRect, currentChild.relativeRect);
+}
+
+function diffChildren(baseline, current) {
+  const baselineChildren = baseline.element.children ?? [];
+  const currentChildren = current.element.children ?? [];
+  const usedIndexes = new Set();
+
+  return baselineChildren.map((baselineChild, index) => {
+    const currentChild = findCurrentChild(baselineChild, currentChildren, usedIndexes, index);
+    if (!currentChild) {
+      return {
+        index: index + 1,
+        baselineSelector: baselineChild.selector,
+        currentSelector: "(missing)",
+        baselineText: baselineChild.text,
+        currentText: "",
+        missing: true,
+        rect: null,
+        styles: {}
+      };
+    }
+
+    return {
+      index: index + 1,
+      baselineSelector: baselineChild.selector,
+      currentSelector: currentChild.selector,
+      baselineText: baselineChild.text,
+      currentText: currentChild.text,
+      missing: false,
+      rect: diffChildRects(baselineChild, currentChild),
+      styles: diffChildStyles(baselineChild, currentChild)
+    };
+  }).filter((childDiff) => {
+    return childDiff.missing || Object.keys(childDiff.styles).length > 0 || (childDiff.rect && (
+      childDiff.rect.x.delta !== 0 ||
+      childDiff.rect.y.delta !== 0 ||
+      childDiff.rect.width.delta !== 0 ||
+      childDiff.rect.height.delta !== 0
+    ));
+  });
+}
+
+export function compareReferenceSets(baselineReferences, currentReferences) {
+  const baselineBounds = unionRect(baselineReferences);
+  const currentBounds = unionRect(currentReferences);
+  const pairCount = Math.min(baselineReferences.length, currentReferences.length);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    count: {
+      baseline: baselineReferences.length,
+      current: currentReferences.length,
+      compared: pairCount
+    },
+    pages: {
+      baseline: baselineReferences[0]?.page ?? null,
+      current: currentReferences[0]?.page ?? null
+    },
+    bounds: baselineBounds && currentBounds ? diffRect(baselineBounds, currentBounds) : null,
+    pairs: Array.from({ length: pairCount }, (_, index) => {
+      const baseline = baselineReferences[index];
+      const current = currentReferences[index];
+      return {
+        index: index + 1,
+        baselineSelector: baseline.element.selector,
+        currentSelector: current.element.selector,
+        baselineText: baseline.element.text,
+        currentText: current.element.text,
+        rect: diffRect(baseline.element.rect, current.element.rect),
+        styles: diffStyles(baseline, current),
+        children: diffChildren(baseline, current)
+      };
+    })
+  };
+}
+
+function formatDelta(item) {
+  const sign = item.delta > 0 ? "+" : "";
+  return `参考 ${item.baseline} / 当前 ${item.current} / 差异 ${sign}${item.delta}px`;
+}
+
+function formatBounds(bounds) {
+  if (!bounds) {
+    return "(无)";
+  }
+  return [
+    `x: ${formatDelta(bounds.x)}`,
+    `y: ${formatDelta(bounds.y)}`,
+    `width: ${formatDelta(bounds.width)}`,
+    `height: ${formatDelta(bounds.height)}`
+  ].join("\n");
+}
+
+function formatPair(pair) {
+  const styleLines = Object.entries(pair.styles).map(([name, value]) => {
+    return `- ${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`;
+  });
+
+  return [
+    `### 元素 ${pair.index}`,
+    `参考 selector: ${pair.baselineSelector}`,
+    `当前 selector: ${pair.currentSelector}`,
+    `文本: 参考 ${pair.baselineText || "(空)"} / 当前 ${pair.currentText || "(空)"}`,
+    "位置尺寸:",
+    `- x: ${formatDelta(pair.rect.x)}`,
+    `- y: ${formatDelta(pair.rect.y)}`,
+    `- width: ${formatDelta(pair.rect.width)}`,
+    `- height: ${formatDelta(pair.rect.height)}`,
+    "样式差异:",
+    ...(styleLines.length > 0 ? styleLines : ["- 未发现关键样式差异"]),
+    formatChildDiffs(pair.children)
+  ].join("\n");
+}
+
+function formatChildDiffs(children = []) {
+  if (children.length === 0) {
+    return "子元素差异:\n- 未发现采样子元素差异";
+  }
+
+  return [
+    "子元素差异:",
+    ...children.flatMap((child) => {
+      if (child.missing) {
+        return [
+          `- 子元素 ${child.index}: ${child.baselineSelector} 缺失`,
+          `  文本: ${child.baselineText || "(空)"}`
+        ];
+      }
+
+      const styleLines = Object.entries(child.styles).map(([name, value]) => {
+        return `  - ${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`;
+      });
+      return [
+        `- 子元素 ${child.index}: ${child.baselineSelector} -> ${child.currentSelector}`,
+        `  文本: 参考 ${child.baselineText || "(空)"} / 当前 ${child.currentText || "(空)"}`,
+        `  位置: x ${formatDelta(child.rect.x)}; y ${formatDelta(child.rect.y)}; width ${formatDelta(child.rect.width)}; height ${formatDelta(child.rect.height)}`,
+        ...styleLines
+      ];
+    })
+  ].join("\n");
+}
+
+export function buildDiffPrompt(diff) {
+  return [
+    "请根据这些差异调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
+    "",
+    "## 页面",
+    `参考页: ${diff.pages.baseline?.url ?? "(未知)"}`,
+    `当前实现页: ${diff.pages.current?.url ?? "(未知)"}`,
+    `对比元素数量: 参考 ${diff.count.baseline} / 当前 ${diff.count.current} / 已配对 ${diff.count.compared}`,
+    "",
+    "## 整体边界差异",
+    formatBounds(diff.bounds),
+    "",
+    "## 逐元素差异",
+    ...diff.pairs.map(formatPair),
+    "",
+    "## 修复要求",
+    "- 优先从共同父级容器、flex/grid、gap、padding、字体 token、颜色 token、圆角和阴影变量入手。",
+    "- 不要用 absolute positioning 或大量 transform 去硬凑，除非原组件本身就是定位布局。",
+    "- 如果参考和当前的选择顺序可能不一致，请先说明你如何重新匹配元素。",
+    "- 输出时先说明要改哪些源码位置，再给出 patch。",
+    ""
+  ].join("\n");
+}

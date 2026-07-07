@@ -1,0 +1,282 @@
+function line(label, value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  return `${label}: ${value}`;
+}
+
+function block(title, lines) {
+  const content = lines.filter(Boolean);
+  if (content.length === 0) {
+    return "";
+  }
+  return [`## ${title}`, ...content, ""].join("\n");
+}
+
+function json(value) {
+  return JSON.stringify(value, null, 2);
+}
+
+function cssBlock(styles = {}) {
+  return Object.entries(styles)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `  ${name}: ${value};`)
+    .join("\n");
+}
+
+function inlineVars(styleVars = {}) {
+  return Object.entries(styleVars)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${name} ${value}`)
+    .join("; ");
+}
+
+function formatChildSnapshot(child, index) {
+  const rect = child.relativeRect ?? {};
+  const styles = child.styles ?? {};
+  const sizeParts = [
+    styles.width ? `width ${styles.width}` : null,
+    styles.minWidth ? `min-width ${styles.minWidth}` : null,
+    styles.maxWidth ? `max-width ${styles.maxWidth}` : null,
+    styles.height ? `height ${styles.height}` : null,
+    styles.minHeight ? `min-height ${styles.minHeight}` : null,
+    styles.maxHeight ? `max-height ${styles.maxHeight}` : null
+  ].filter(Boolean);
+  const layoutParts = [
+    styles.position && styles.position !== "static" ? `position ${styles.position}` : null,
+    styles.inset && styles.inset !== "auto auto auto auto" ? `inset ${styles.inset}` : null,
+    styles.zIndex && styles.zIndex !== "auto" ? `z-index ${styles.zIndex}` : null,
+    styles.overflow ? `overflow ${styles.overflow}` : null,
+    styles.overflowX && styles.overflowX !== styles.overflow ? `overflow-x ${styles.overflowX}` : null,
+    styles.overflowY && styles.overflowY !== styles.overflow ? `overflow-y ${styles.overflowY}` : null,
+    styles.transform && styles.transform !== "none" ? `transform ${styles.transform}` : null,
+    styles.transformOrigin ? `origin ${styles.transformOrigin}` : null,
+    styles.transitionProperty && styles.transitionProperty !== "all" ? `transition-property ${styles.transitionProperty}` : null,
+    styles.transitionDuration && styles.transitionDuration !== "0s" ? `transition-duration ${styles.transitionDuration}` : null,
+    styles.transitionTimingFunction ? `transition-timing ${styles.transitionTimingFunction}` : null,
+    styles.gap ? `gap ${styles.gap}` : null,
+    styles.rowGap && styles.rowGap !== styles.gap ? `row-gap ${styles.rowGap}` : null,
+    styles.columnGap && styles.columnGap !== styles.gap ? `column-gap ${styles.columnGap}` : null,
+    styles.alignItems ? `align ${styles.alignItems}` : null,
+    styles.justifyContent ? `justify ${styles.justifyContent}` : null,
+    styles.flexDirection ? `flex-direction ${styles.flexDirection}` : null,
+    styles.flexWrap ? `flex-wrap ${styles.flexWrap}` : null,
+    styles.gridTemplateColumns && styles.gridTemplateColumns !== "none" ? `grid ${styles.gridTemplateColumns}` : null
+  ].filter(Boolean);
+  const textParts = [
+    styles.fontFamily ? `family ${styles.fontFamily}` : null,
+    styles.fontSize ? `size ${styles.fontSize}` : null,
+    styles.fontWeight ? `weight ${styles.fontWeight}` : null,
+    styles.lineHeight ? `line-height ${styles.lineHeight}` : null,
+    styles.letterSpacing ? `letter-spacing ${styles.letterSpacing}` : null,
+    styles.textAlign ? `align ${styles.textAlign}` : null,
+    styles.whiteSpace ? `white-space ${styles.whiteSpace}` : null,
+    styles.textOverflow ? `text-overflow ${styles.textOverflow}` : null,
+    styles.wordBreak ? `word-break ${styles.wordBreak}` : null
+  ].filter(Boolean);
+  const visualParts = [
+    styles.color ? `color ${styles.color}` : null,
+    styles.background ? `background ${styles.background}` : null,
+    styles.backgroundImage && styles.backgroundImage !== "none" ? `background-image ${styles.backgroundImage}` : null,
+    styles.backgroundSize && styles.backgroundSize !== "auto" ? `background-size ${styles.backgroundSize}` : null,
+    styles.backgroundPosition ? `background-position ${styles.backgroundPosition}` : null,
+    styles.opacity ? `opacity ${styles.opacity}` : null
+  ].filter(Boolean);
+  const mediaParts = [
+    styles.objectFit && styles.objectFit !== "fill" ? `object-fit ${styles.objectFit}` : null,
+    styles.objectPosition && styles.objectPosition !== "50% 50%" ? `object-position ${styles.objectPosition}` : null,
+    styles.aspectRatio && styles.aspectRatio !== "auto" ? `aspect-ratio ${styles.aspectRatio}` : null
+  ].filter(Boolean);
+
+  return [
+    `${index + 1}. ${child.selector}`,
+    `   Tag/Text: ${child.tag}${child.text ? ` / ${child.text}` : ""}`,
+    `   Relative rect: ${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`,
+    sizeParts.length > 0 ? `   Size constraints: ${sizeParts.join("; ")}` : null,
+    textParts.length > 0 ? `   Text: ${textParts.join("; ")}` : null,
+    visualParts.length > 0 ? `   Visual: ${visualParts.join("; ")}` : null,
+    `   Box: display ${styles.display}; padding ${styles.padding}; margin ${styles.margin}; border ${styles.border}; outline ${styles.outline}; radius ${styles.borderRadius}; shadow ${styles.boxShadow}; box-sizing ${styles.boxSizing}`,
+    layoutParts.length > 0 ? `   Layout/Motion: ${layoutParts.join("; ")}` : null,
+    mediaParts.length > 0 ? `   Media: ${mediaParts.join("; ")}` : null,
+    Object.keys(child.styleVars ?? {}).length > 0 ? `   Component vars: ${inlineVars(child.styleVars)}` : null
+  ].filter(Boolean).join("\n");
+}
+
+function buildChildrenBlock(element) {
+  const children = element.children ?? [];
+  if (children.length === 0) {
+    return "";
+  }
+
+  return block("关键子元素采样", [
+    `共采样 ${children.length} 个关键子元素。下面是相对当前目标元素的内部结构和样式线索：`,
+    ...children.map(formatChildSnapshot)
+  ]);
+}
+
+function unionRect(references) {
+  const rects = references.map((item) => item.element.rect);
+  const left = Math.min(...rects.map((rect) => rect.left ?? rect.x));
+  const top = Math.min(...rects.map((rect) => rect.top ?? rect.y));
+  const right = Math.max(...rects.map((rect) => rect.right ?? rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom ?? rect.y + rect.height));
+  return {
+    x: left,
+    y: top,
+    width: Math.round((right - left) * 100) / 100,
+    height: Math.round((bottom - top) * 100) / 100
+  };
+}
+
+function summarizeElement(reference, index) {
+  const { element } = reference;
+  const { rect, styles } = element;
+  return [
+    `${index + 1}. ${element.selector}`,
+    `   Tag/Text: ${element.tag}${element.text ? ` / ${element.text}` : ""}`,
+    `   Rect: ${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`,
+    `   Font: ${styles.font.family}; ${styles.font.size}; weight ${styles.font.weight}; line-height ${styles.font.lineHeight}`,
+    `   Color: ${styles.color.text}; background ${styles.color.background}`,
+    `   Box: display ${styles.box.display}; padding ${styles.box.padding}; margin ${styles.box.margin}; radius ${styles.box.borderRadius}; shadow ${styles.box.boxShadow}`,
+    `   Layout: gap ${styles.layout.gap}; align ${styles.layout.alignItems}; justify ${styles.layout.justifyContent}`,
+    `   Parent: ${element.parent?.selector ?? "(none)"}; display ${element.parent?.display ?? "(unknown)"}; gap ${element.parent?.gap ?? "(unknown)"}`,
+    `   HTML: ${element.outerHTML}`
+  ].join("\n");
+}
+
+export function buildAiPrompt(reference, target = "Codex / Claude Code", options = {}) {
+  const { page, element } = reference;
+  const { rect, styles } = element;
+  const includeFullComputedStyle = Boolean(options.includeFullComputedStyle);
+  const includeJson = Boolean(options.includeJson);
+  const fullStyleBlock = includeFullComputedStyle ? cssBlock(element.fullComputedStyle) : "";
+
+  return [
+    "请在当前项目中 1:1 还原下面这个参考元素。",
+    "",
+    "你是根据浏览器真实渲染信息还原 UI，不要只凭截图猜。优先找到当前项目里对应的组件、布局容器、样式文件或 design token。",
+    "",
+    block("来源页面", [
+      line("URL", page.url),
+      line("Title", page.title),
+      line("Viewport", `${page.viewport.width} x ${page.viewport.height}`),
+      line("Device pixel ratio", page.viewport.devicePixelRatio)
+    ]),
+    block("目标元素", [
+      line("Tag", element.tag),
+      line("Text", element.text),
+      line("Selector", element.selector),
+      line("DOM path", element.domPath),
+      line("Rect", `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`),
+      line("Role", element.attributes?.role),
+      line("Aria label", element.attributes?.ariaLabel),
+      line("Test attributes", element.attributes?.testAttributes?.join(", "))
+    ]),
+    block("关键视觉样式", [
+      line("Font", `${styles.font.family}; ${styles.font.size}; weight ${styles.font.weight}; line-height ${styles.font.lineHeight}`),
+      line("Letter spacing", styles.font.letterSpacing),
+      line("Text color", styles.color.text),
+      line("Background", styles.color.background),
+      line("Background image", styles.color.backgroundImage && styles.color.backgroundImage !== "none" ? styles.color.backgroundImage : ""),
+      line("Display", styles.box.display),
+      line("Padding", styles.box.padding),
+      line("Margin", styles.box.margin),
+      line("Border", styles.box.border),
+      line("Border radius", styles.box.borderRadius),
+      line("Box shadow", styles.box.boxShadow),
+      line("Position", styles.layout.position),
+      line("Gap", styles.layout.gap),
+      line("Align / justify", `${styles.layout.alignItems} / ${styles.layout.justifyContent}`)
+    ]),
+    block("父级布局上下文", [
+      line("Parent selector", element.parent?.selector),
+      line("Parent display", element.parent?.display),
+      line("Parent gap", element.parent?.gap),
+      line("Parent padding", element.parent?.padding),
+      line("Ancestor trail", element.ancestorTrail?.join(" > "))
+    ]),
+    buildChildrenBlock(element),
+    block("参考 HTML", ["```html", element.outerHTML, "```"]),
+    includeFullComputedStyle
+      ? block("完整 computed CSS", ["```css", `${element.selector} {`, fullStyleBlock, "}", "```"])
+      : "",
+    includeJson ? block("结构化 JSON", ["```json", json(reference), "```"]) : "",
+    "## 实现要求",
+    `- 面向 ${target} 修改当前项目源码。`,
+    "- 尽量保持尺寸、字体、颜色、间距、圆角、阴影、对齐方式和父级布局关系一致。",
+    "- 不要盲目复制无关 inline style；优先映射到当前项目已有组件、Tailwind class、CSS module、design token 或样式变量。",
+    "- 如果参考元素内部嵌套很多无关属性、埋点属性或框架生成属性，请清理后再实现。",
+    "- 如果无法完全判断，请先列出不确定项和你会如何验证视觉还原度。",
+    ""
+  ].join("\n");
+}
+
+export function buildMultiAiPrompt(references, target = "Codex / Claude Code", options = {}) {
+  if (references.length === 0) {
+    return "请先选择至少一个参考元素。";
+  }
+  if (references.length === 1) {
+    return buildAiPrompt(references[0], target, options);
+  }
+
+  const page = references[0].page;
+  const rect = unionRect(references);
+  const includeFullComputedStyle = Boolean(options.includeFullComputedStyle);
+  const fullStyles = includeFullComputedStyle
+    ? references.flatMap((reference, index) => [
+        `/* ${index + 1}. ${reference.element.selector} */`,
+        `${reference.element.selector} {`,
+        cssBlock(reference.element.fullComputedStyle),
+        "}"
+      ])
+    : [];
+
+  return [
+    `请在当前项目中 1:1 还原下面这一组参考元素。本次选中了 ${references.length} 个参考元素。`,
+    "",
+    "你是根据浏览器真实渲染信息还原 UI，不要只凭截图猜。优先找到共同父级布局容器，再处理子元素样式。",
+    "",
+    block("来源页面", [
+      line("URL", page.url),
+      line("Title", page.title),
+      line("Viewport", `${page.viewport.width} x ${page.viewport.height}`),
+      line("整体边界", `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`)
+    ]),
+    block("选中元素", references.map((reference, index) => summarizeElement(reference, index))),
+    block(
+      "关键子元素采样",
+      references.flatMap((reference, referenceIndex) => {
+        const children = reference.element.children ?? [];
+        if (children.length === 0) {
+          return [];
+        }
+        return [
+          `目标 ${referenceIndex + 1} · ${reference.element.selector} · 子元素 ${children.length} 个：`,
+          ...children.map((child, childIndex) => formatChildSnapshot(child, childIndex))
+        ];
+      })
+    ),
+    includeFullComputedStyle ? block("完整 computed CSS", ["```css", ...fullStyles, "```"]) : "",
+    "## 实现要求",
+    `- 面向 ${target} 修改当前项目源码。`,
+    "- 优先从共同父级布局、grid/flex、gap、padding、对齐关系入手，而不是分别给每个元素写定位 hack。",
+    "- 尽量保持每个元素的尺寸、字体、颜色、间距、圆角、阴影、对齐方式一致。",
+    "- 不要盲目复制无关 inline style；优先映射到当前项目已有组件、Tailwind class、CSS module、design token 或样式变量。",
+    "- 如果无法完全判断，请先列出不确定项和你会如何验证视觉还原度。",
+    ""
+  ].join("\n");
+}
+
+export function buildJson(reference) {
+  return json(reference);
+}
+
+export function buildMultiJson(references) {
+  return json({
+    capturedAt: new Date().toISOString(),
+    count: references.length,
+    page: references[0]?.page ?? null,
+    bounds: references.length > 0 ? unionRect(references) : null,
+    elements: references.map((reference) => reference.element)
+  });
+}

@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "UI Reference Copier",
+  "version": "0.1.0",
+  "description": "Select a rendered UI element and copy a structured prompt for Codex, Claude Code, or Cursor.",
+  "permissions": ["activeTab", "scripting", "clipboardWrite", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Toggle UI Reference Copier"
+  },
+  "icons": {
+    "16": "icon.svg",
+    "32": "icon.svg",
+    "48": "icon.svg",
+    "128": "icon.svg"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["collector.mjs", "prompt.mjs", "diff.mjs", "selection.mjs", "content.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
