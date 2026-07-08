@@ -641,9 +641,6 @@
     }
   }
 
-  globalThis.__UI_REFERENCE_COPIER_TOGGLE__ = toggle;
-  globalThis.__UI_REFERENCE_COPIER_READY__ = true;
-
   document.addEventListener(
     "mousemove",
     (event) => {
@@ -937,8 +934,6 @@
     chrome.runtime.onMessage.removeListener(runtimeMessageListener);
     chrome.storage.onChanged.removeListener(storageChangedListener);
     document.documentElement.classList.remove("urc-active-page");
-    delete globalThis.__UI_REFERENCE_COPIER_TOGGLE__;
-    delete globalThis.__UI_REFERENCE_COPIER_READY__;
     root.remove();
   }, { once: true });
 
