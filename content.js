@@ -886,10 +886,16 @@
 
   window.addEventListener("resize", ensurePanelInViewport, { signal: lifecycle.signal });
 
-  const runtimeMessageListener = (message) => {
+  const runtimeMessageListener = (message, _sender, sendResponse) => {
+    if (message?.type === "ui-reference-copier/ping") {
+      sendResponse({ ready: true });
+      return false;
+    }
     if (message?.type === "ui-reference-copier/toggle") {
       toggle();
+      sendResponse({ toggled: true });
     }
+    return false;
   };
   chrome.runtime.onMessage.addListener(runtimeMessageListener);
 

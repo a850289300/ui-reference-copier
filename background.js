@@ -9,8 +9,21 @@ function isSupportedUrl(url = "") {
   return /^https?:\/\//.test(url) || /^file:\/\//.test(url);
 }
 
-async function ensureInjected(tabId) {
-  if (INJECTED_TABS.has(tabId)) {
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isReceivingEndError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Receiving end does not exist") ||
+    message.includes("Could not establish connection") ||
+    message.includes("No receiving end");
+}
+
+async function ensureInjected(tabId, options = {}) {
+  if (!options.force && INJECTED_TABS.has(tabId)) {
     return;
   }
 
@@ -27,16 +40,48 @@ async function ensureInjected(tabId) {
   INJECTED_TABS.add(tabId);
 }
 
+async function pingContent(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "ui-reference-copier/ping" });
+    return response?.ready === true;
+  } catch (error) {
+    if (isReceivingEndError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function waitForContentReady(tabId, attempts = 8) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (await pingContent(tabId)) {
+      return true;
+    }
+    await sleep(80);
+  }
+  return false;
+}
+
 async function sendToggleMessage(tabId) {
+  if (!await waitForContentReady(tabId)) {
+    INJECTED_TABS.delete(tabId);
+    await ensureInjected(tabId, { force: true });
+    if (!await waitForContentReady(tabId)) {
+      throw new Error("UI Reference Copier content script did not start. Try refreshing the target page.");
+    }
+  }
+
   try {
     await chrome.tabs.sendMessage(tabId, { type: "ui-reference-copier/toggle" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes("Receiving end does not exist")) {
+    if (!isReceivingEndError(error)) {
       throw error;
     }
     INJECTED_TABS.delete(tabId);
-    await ensureInjected(tabId);
+    await ensureInjected(tabId, { force: true });
+    if (!await waitForContentReady(tabId)) {
+      throw new Error("UI Reference Copier content script did not start after reinjection. Try refreshing the target page.");
+    }
     await chrome.tabs.sendMessage(tabId, { type: "ui-reference-copier/toggle" });
   }
 }
