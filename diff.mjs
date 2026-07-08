@@ -237,6 +237,120 @@ function diffChildRects(baselineChild, currentChild) {
   return diffRect(baselineChild.relativeRect, currentChild.relativeRect);
 }
 
+const ICON_FIELDS = [
+  "type",
+  "selector",
+  "viewBox",
+  "pathCount",
+  "useHref",
+  "fill",
+  "stroke",
+  "color",
+  "src",
+  "alt",
+  "objectFit",
+  "className",
+  "fontFamily",
+  "backgroundImage",
+  "maskImage"
+];
+
+function iconLabel(icon) {
+  if (!icon) {
+    return "(missing)";
+  }
+  if (icon.type === "svg") {
+    return `svg ${icon.selector || "(unknown)"} viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount ?? "(unknown)"}`;
+  }
+  if (icon.type === "img") {
+    return `img ${icon.selector || "(unknown)"} src ${icon.src || "(none)"}`;
+  }
+  return `css/iconfont ${icon.selector || "(unknown)"} class ${icon.className || "(none)"}`;
+}
+
+function diffIconFields(baselineIcon, currentIcon) {
+  const result = {};
+  ICON_FIELDS.forEach((name) => {
+    const baselineValue = baselineIcon?.[name] ?? "";
+    const currentValue = currentIcon?.[name] ?? "";
+    if (String(baselineValue) !== String(currentValue)) {
+      result[name] = {
+        baseline: String(baselineValue),
+        current: String(currentValue)
+      };
+    }
+  });
+  return result;
+}
+
+function diffIconRects(baselineIcon, currentIcon) {
+  if (!baselineIcon?.rect || !currentIcon?.rect) {
+    return null;
+  }
+  return diffRect(baselineIcon.rect, currentIcon.rect);
+}
+
+function hasRectDiff(rect) {
+  return Boolean(rect) && (
+    rect.x.delta !== 0 ||
+    rect.y.delta !== 0 ||
+    rect.width.delta !== 0 ||
+    rect.height.delta !== 0
+  );
+}
+
+function diffIcons(baseline, current) {
+  const baselineIcons = baseline.element.iconDetails ?? [];
+  const currentIcons = current.element.iconDetails ?? [];
+  const pairCount = Math.min(baselineIcons.length, currentIcons.length);
+  const iconDiffs = [];
+
+  for (let index = 0; index < pairCount; index += 1) {
+    const baselineIcon = baselineIcons[index];
+    const currentIcon = currentIcons[index];
+    const rect = diffIconRects(baselineIcon, currentIcon);
+    const fields = diffIconFields(baselineIcon, currentIcon);
+    if (hasRectDiff(rect) || Object.keys(fields).length > 0) {
+      iconDiffs.push({
+        index: index + 1,
+        baseline: iconLabel(baselineIcon),
+        current: iconLabel(currentIcon),
+        missing: false,
+        rect,
+        fields
+      });
+    }
+  }
+
+  baselineIcons.slice(pairCount).forEach((icon, offset) => {
+    iconDiffs.push({
+      index: pairCount + offset + 1,
+      baseline: iconLabel(icon),
+      current: "(missing)",
+      missing: true,
+      rect: null,
+      fields: {}
+    });
+  });
+
+  currentIcons.slice(pairCount).forEach((icon, offset) => {
+    iconDiffs.push({
+      index: pairCount + offset + 1,
+      baseline: "(missing)",
+      current: iconLabel(icon),
+      extra: true,
+      rect: null,
+      fields: {}
+    });
+  });
+
+  return {
+    baselineCount: baselineIcons.length,
+    currentCount: currentIcons.length,
+    items: iconDiffs
+  };
+}
+
 function absoluteDelta(value) {
   return Math.abs(Number(value?.delta ?? 0));
 }
@@ -286,13 +400,50 @@ function childSummaryItems(children = [], pairIndex) {
   });
 }
 
+function iconSummaryItems(icons, pairIndex) {
+  if (!icons || (icons.baselineCount === 0 && icons.currentCount === 0)) {
+    return [];
+  }
+
+  const countItems = icons.baselineCount === icons.currentCount
+    ? []
+    : [{
+        score: 100,
+        text: `元素 ${pairIndex}: 图标数量 参考 ${icons.baselineCount} / 当前 ${icons.currentCount}`
+      }];
+
+  return [
+    ...countItems,
+    ...icons.items.flatMap((icon) => {
+      const context = `元素 ${pairIndex} 的图标 ${icon.index}: `;
+      if (icon.missing) {
+        return [{
+          score: 110,
+          text: `${context}${icon.baseline} 在当前实现中缺失`
+        }];
+      }
+      if (icon.extra) {
+        return [{
+          score: 80,
+          text: `${context}当前多出 ${icon.current}`
+        }];
+      }
+      return [
+        ...rectSummaryItems(icon.rect, "位置尺寸", context),
+        ...styleSummaryItems(icon.fields, context)
+      ];
+    })
+  ];
+}
+
 export function summarizeDiff(diff, limit = 10) {
   const items = [
     ...rectSummaryItems(diff.bounds, "整体边界", ""),
     ...diff.pairs.flatMap((pair) => [
       ...rectSummaryItems(pair.rect, "位置尺寸", `元素 ${pair.index}: `),
       ...styleSummaryItems(pair.styles, `元素 ${pair.index}: `),
-      ...childSummaryItems(pair.children, pair.index)
+      ...childSummaryItems(pair.children, pair.index),
+      ...iconSummaryItems(pair.icons, pair.index)
     ])
   ];
 
@@ -370,7 +521,8 @@ export function compareReferenceSets(baselineReferences, currentReferences) {
         currentText: current.element.text,
         rect: diffRect(baseline.element.rect, current.element.rect),
         styles: diffStyles(baseline, current),
-        children: diffChildren(baseline, current)
+        children: diffChildren(baseline, current),
+        icons: diffIcons(baseline, current)
       };
     })
   };
@@ -410,8 +562,9 @@ function formatPair(pair) {
     `- height: ${formatDelta(pair.rect.height)}`,
     "样式差异:",
     ...(styleLines.length > 0 ? styleLines : ["- 未发现关键样式差异"]),
-    formatChildDiffs(pair.children)
-  ].join("\n");
+    formatChildDiffs(pair.children),
+    formatIconDiffs(pair.icons)
+  ].filter(Boolean).join("\n");
 }
 
 function formatChildDiffs(children = []) {
@@ -440,6 +593,43 @@ function formatChildDiffs(children = []) {
       ];
     })
   ].join("\n");
+}
+
+function formatIconDiffs(icons) {
+  if (!icons || (icons.baselineCount === 0 && icons.currentCount === 0)) {
+    return "";
+  }
+
+  const lines = [
+    "图标差异:",
+    `- 数量: 参考 ${icons.baselineCount} / 当前 ${icons.currentCount}`
+  ];
+
+  if (icons.items.length === 0) {
+    lines.push("- 未发现采集图标差异");
+    return lines.join("\n");
+  }
+
+  icons.items.forEach((icon) => {
+    if (icon.missing) {
+      lines.push(`- 图标 ${icon.index}: ${icon.baseline} 缺失`);
+      return;
+    }
+    if (icon.extra) {
+      lines.push(`- 图标 ${icon.index}: 当前多出 ${icon.current}`);
+      return;
+    }
+
+    lines.push(`- 图标 ${icon.index}: ${icon.baseline} -> ${icon.current}`);
+    if (icon.rect) {
+      lines.push(`  位置: x ${formatDelta(icon.rect.x)}; y ${formatDelta(icon.rect.y)}; width ${formatDelta(icon.rect.width)}; height ${formatDelta(icon.rect.height)}`);
+    }
+    Object.entries(icon.fields).forEach(([name, value]) => {
+      lines.push(`  - ${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`);
+    });
+  });
+
+  return lines.join("\n");
 }
 
 export function buildDiffPrompt(diff) {

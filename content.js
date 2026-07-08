@@ -125,6 +125,10 @@
           <button class="urc-secondary" type="button" data-action="set-baseline" disabled>设为参考</button>
           <button class="urc-secondary" type="button" data-action="clear-baseline">清除参考</button>
         </div>
+        <label class="urc-toggle-field">
+          <input type="checkbox" data-setting="include-icon-details">
+          <span>采集图标细节</span>
+        </label>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-baseline" disabled>对比参考</button>
           <button class="urc-primary" type="button" data-action="copy-diff" disabled>复制差异给 AI</button>
@@ -148,6 +152,10 @@
           <button class="urc-secondary" type="button" data-action="add-reference-group" disabled>保存新参考组</button>
           <button class="urc-secondary" type="button" data-action="match-current-group" disabled>匹配当前组</button>
         </div>
+        <label class="urc-toggle-field">
+          <input type="checkbox" data-setting="include-icon-details">
+          <span>采集图标细节</span>
+        </label>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-groups" disabled>对比全部组</button>
           <button class="urc-primary" type="button" data-action="copy-group-diff" data-detail="compact" disabled>复制精简差异</button>
@@ -190,7 +198,7 @@
   const copyGroupDiffButtons = Array.from(root.querySelectorAll("[data-action='copy-group-diff']"));
   const groupDiffOutputEl = root.querySelector("[data-group-diff-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
-  const includeIconDetailsInput = root.querySelector("[data-setting='include-icon-details']");
+  const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
   const selectParentButton = root.querySelector("[data-action='select-parent']");
   const tabButtons = Array.from(root.querySelectorAll("[data-tab]"));
   const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
@@ -285,7 +293,9 @@
       state.settings.activeTab = "capture";
     }
     childDepthSelect.value = state.settings.childDepth;
-    includeIconDetailsInput.checked = Boolean(state.settings.includeIconDetails);
+    includeIconDetailsInputs.forEach((input) => {
+      input.checked = Boolean(state.settings.includeIconDetails);
+    });
     renderActiveTab();
   }
 
@@ -835,15 +845,21 @@
     });
   }, { signal: lifecycle.signal });
 
-  includeIconDetailsInput.addEventListener("change", () => {
-    void saveSettings({ includeIconDetails: includeIconDetailsInput.checked }).then(() => {
-      state.lastDiff = null;
-      state.lastGroupedDiff = null;
-      renderBaselineStatus();
-      renderGroupsStatus();
-      setFeedback(includeIconDetailsInput.checked ? "已开启图标细节采集，下一次选择元素时生效。" : "已关闭图标细节采集。");
-    });
-  }, { signal: lifecycle.signal });
+  includeIconDetailsInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      const enabled = input.checked;
+      includeIconDetailsInputs.forEach((item) => {
+        item.checked = enabled;
+      });
+      void saveSettings({ includeIconDetails: enabled }).then(() => {
+        state.lastDiff = null;
+        state.lastGroupedDiff = null;
+        renderBaselineStatus();
+        renderGroupsStatus();
+        setFeedback(enabled ? "已开启图标细节采集，下一次选择并保存/匹配元素时生效。" : "已关闭图标细节采集。");
+      });
+    }, { signal: lifecycle.signal });
+  });
 
   root.addEventListener("pointerdown", (event) => {
     if (event.target?.closest?.("[data-action]")) {
@@ -924,7 +940,9 @@
       if (childDepthSelect.value !== state.settings.childDepth) {
         childDepthSelect.value = state.settings.childDepth;
       }
-      includeIconDetailsInput.checked = Boolean(state.settings.includeIconDetails);
+      includeIconDetailsInputs.forEach((input) => {
+        input.checked = Boolean(state.settings.includeIconDetails);
+      });
       renderActiveTab();
     }
   };

@@ -59,7 +59,8 @@ function makeReference(selector, rect, overrides = {}) {
         gap: overrides.parentGap ?? "24px",
         padding: "64px"
       },
-      children: overrides.children ?? []
+      children: overrides.children ?? [],
+      iconDetails: overrides.iconDetails ?? []
     }
   };
 }
@@ -88,6 +89,19 @@ const baseline = [
         styleVars: {
           "--n-fill-color": "rgb(32, 128, 240)"
         }
+      }
+    ],
+    iconDetails: [
+      {
+        type: "svg",
+        selector: "svg.icon-arrow",
+        rect: { x: 204, y: 212, width: 16, height: 16 },
+        viewBox: "0 0 24 24",
+        pathCount: 2,
+        useHref: "",
+        fill: "none",
+        stroke: "currentColor",
+        color: "rgb(255, 255, 255)"
       }
     ]
   }),
@@ -129,6 +143,19 @@ const current = [
             "--n-fill-color": "rgb(59, 130, 246)"
           }
         }
+      ],
+      iconDetails: [
+        {
+          type: "svg",
+          selector: "svg.generated-arrow",
+          rect: { x: 206, y: 219, width: 14, height: 14 },
+          viewBox: "0 0 20 20",
+          pathCount: 1,
+          useHref: "",
+          fill: "currentColor",
+          stroke: "none",
+          color: "rgb(255, 255, 255)"
+        }
       ]
     }
   ),
@@ -152,6 +179,10 @@ assert.equal(diff.pairs[0].children[0].styles.width.current, "48px");
 assert.equal(diff.pairs[0].children[0].styles.minWidth.current, "48px");
 assert.equal(diff.pairs[0].children[0].styles.transitionDuration.baseline, "0.3s");
 assert.equal(diff.pairs[0].children[0].styles["var.--n-fill-color"].current, "rgb(59, 130, 246)");
+assert.equal(diff.pairs[0].icons.baselineCount, 1);
+assert.equal(diff.pairs[0].icons.currentCount, 1);
+assert.equal(diff.pairs[0].icons.items[0].fields.viewBox.current, "0 0 20 20");
+assert.equal(diff.pairs[0].icons.items[0].fields.pathCount.baseline, "2");
 
 const prompt = buildDiffPrompt(diff);
 const summary = summarizeDiff(diff);
@@ -165,4 +196,7 @@ assert.match(prompt, /子元素差异/);
 assert.match(prompt, /span\.label/);
 assert.match(prompt, /transitionDuration: 参考 0\.3s \/ 当前 0s/);
 assert.match(prompt, /var\.--n-fill-color: 参考 rgb\(32, 128, 240\) \/ 当前 rgb\(59, 130, 246\)/);
+assert.match(prompt, /图标差异/);
+assert.match(prompt, /viewBox: 参考 0 0 24 24 \/ 当前 0 0 20 20/);
+assert.match(prompt, /pathCount: 参考 2 \/ 当前 1/);
 assert.match(prompt, /请根据这些差异调整当前项目/);

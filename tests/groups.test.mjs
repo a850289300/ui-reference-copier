@@ -66,7 +66,8 @@ function makeReference(selector, width, overrides = {}) {
         gap: overrides.parentGap ?? "16px",
         padding: overrides.parentPadding ?? "0px"
       },
-      children: overrides.children ?? []
+      children: overrides.children ?? [],
+      iconDetails: overrides.iconDetails ?? []
     }
   };
 }
@@ -77,7 +78,19 @@ const groupA = createReferenceGroup(
     background: "rgb(255, 255, 255)",
     borderRadius: "4px",
     x: 24,
-    y: 40
+    y: 40,
+    iconDetails: [
+      {
+        type: "svg",
+        selector: "svg.visit-icon",
+        rect: { x: 40, y: 56, width: 18, height: 18 },
+        viewBox: "0 0 24 24",
+        pathCount: 2,
+        fill: "none",
+        stroke: "currentColor",
+        color: "rgb(24, 160, 88)"
+      }
+    ]
   })],
   { id: "group-a", name: "访问量卡片" }
 );
@@ -106,7 +119,19 @@ const matchedA = attachCurrentToGroup(groupA, [
     background: "rgba(0, 0, 0, 0)",
     borderRadius: "0px",
     parentDisplay: "flex",
-    parentGap: "0px"
+    parentGap: "0px",
+    iconDetails: [
+      {
+        type: "svg",
+        selector: "svg.generated-icon",
+        rect: { x: 42, y: 61, width: 14, height: 14 },
+        viewBox: "0 0 20 20",
+        pathCount: 1,
+        fill: "currentColor",
+        stroke: "none",
+        color: "rgb(34, 197, 94)"
+      }
+    ]
   })
 ]);
 
@@ -148,6 +173,7 @@ assert.match(prompt, /width: 参考 300px \/ 当前 284px/);
 assert.match(prompt, /参考范围: div\.visit-card/);
 assert.match(prompt, /背景 rgb\(255, 255, 255\)/);
 assert.match(prompt, /父级: div\.console; display grid; gap 16px/);
+assert.match(prompt, /图标: svg svg\.visit-icon viewBox 0 0 24 24 path 2/);
 assert.match(prompt, /范围检查/);
 assert.match(prompt, /范围可能不一致/);
 assert.match(prompt, /组 2：销售额卡片/);
@@ -158,4 +184,6 @@ assert.ok(prompt.split("\n").length < 120);
 const detailedPrompt = buildGroupedDiffPrompt(result, { detail: "full" });
 assert.match(detailedPrompt, /## 每组详细差异/);
 assert.match(detailedPrompt, /## 整体边界差异/);
+assert.match(detailedPrompt, /图标差异/);
+assert.match(detailedPrompt, /viewBox: 参考 0 0 24 24 \/ 当前 0 0 20 20/);
 assert.ok(detailedPrompt.split("\n").length > prompt.split("\n").length);
