@@ -7,6 +7,9 @@ import {
 } from "../groups.mjs";
 
 function makeReference(selector, width, overrides = {}) {
+  const x = overrides.x ?? 100;
+  const y = overrides.y ?? 100;
+  const height = overrides.height ?? 120;
   return {
     page: {
       url: overrides.url ?? "https://example.com/reference",
@@ -22,14 +25,14 @@ function makeReference(selector, width, overrides = {}) {
       tag: "div",
       text: overrides.text ?? "访问量",
       rect: {
-        x: 100,
-        y: 100,
+        x,
+        y,
         width,
-        height: overrides.height ?? 120,
-        left: 100,
-        top: 100,
-        right: 100 + width,
-        bottom: 220
+        height,
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height
       },
       styles: {
         font: {
@@ -41,15 +44,15 @@ function makeReference(selector, width, overrides = {}) {
         },
         color: {
           text: "rgb(51, 54, 57)",
-          background: "rgba(0, 0, 0, 0)"
+          background: overrides.background ?? "rgba(0, 0, 0, 0)"
         },
         box: {
           display: "block",
           padding: overrides.padding ?? "0px",
           margin: "0px",
           border: "0px solid",
-          borderRadius: "0px",
-          boxShadow: "none"
+          borderRadius: overrides.borderRadius ?? "0px",
+          boxShadow: overrides.boxShadow ?? "none"
         },
         layout: {
           gap: "normal",
@@ -58,10 +61,10 @@ function makeReference(selector, width, overrides = {}) {
         }
       },
       parent: {
-        selector: "div.console",
-        display: "grid",
-        gap: "16px",
-        padding: "0px"
+        selector: overrides.parentSelector ?? "div.console",
+        display: overrides.parentDisplay ?? "grid",
+        gap: overrides.parentGap ?? "16px",
+        padding: overrides.parentPadding ?? "0px"
       },
       children: overrides.children ?? []
     }
@@ -69,11 +72,23 @@ function makeReference(selector, width, overrides = {}) {
 }
 
 const groupA = createReferenceGroup(
-  [makeReference("div.visit-card", 300, { text: "访问量" })],
+  [makeReference("div.visit-card", 300, {
+    text: "访问量",
+    background: "rgb(255, 255, 255)",
+    borderRadius: "4px",
+    x: 24,
+    y: 40
+  })],
   { id: "group-a", name: "访问量卡片" }
 );
 const groupB = createReferenceGroup(
-  [makeReference("div.sales-card", 300, { text: "销售额" })],
+  [makeReference("div.sales-card", 300, {
+    text: "销售额",
+    background: "rgb(255, 255, 255)",
+    borderRadius: "4px",
+    x: 348,
+    y: 40
+  })],
   { id: "group-b", name: "销售额卡片" }
 );
 
@@ -87,7 +102,11 @@ const matchedA = attachCurrentToGroup(groupA, [
     url: "http://localhost:3000",
     title: "App",
     text: "访问量",
-    fontSize: "12px"
+    fontSize: "12px",
+    background: "rgba(0, 0, 0, 0)",
+    borderRadius: "0px",
+    parentDisplay: "flex",
+    parentGap: "0px"
   })
 ]);
 
@@ -104,7 +123,13 @@ assert.equal(result.groups[1].status, "missing-current");
 
 const prompt = buildGroupedDiffPrompt(result);
 assert.match(prompt, /多组元素对比/);
+assert.match(prompt, /整体布局关系/);
+assert.match(prompt, /参考整体边界/);
+assert.match(prompt, /参考组范围快照/);
 assert.match(prompt, /组 1：访问量卡片/);
 assert.match(prompt, /width: 参考 300px \/ 当前 284px/);
+assert.match(prompt, /参考范围: div\.visit-card/);
+assert.match(prompt, /背景 rgb\(255, 255, 255\)/);
+assert.match(prompt, /父级: div\.console; display grid; gap 16px/);
 assert.match(prompt, /组 2：销售额卡片/);
 assert.match(prompt, /还没有匹配当前实现元素/);

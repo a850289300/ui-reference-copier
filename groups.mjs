@@ -8,6 +8,87 @@ function clone(value) {
   return structuredClone(value);
 }
 
+function round(value) {
+  return Math.round(Number(value) * 100) / 100;
+}
+
+function unionRectFromGroups(groups, key) {
+  const rects = groups
+    .flatMap((group) => group[key] ?? [])
+    .map((reference) => reference.element.rect)
+    .filter(Boolean);
+  if (rects.length === 0) {
+    return null;
+  }
+  const left = Math.min(...rects.map((rect) => rect.left ?? rect.x));
+  const top = Math.min(...rects.map((rect) => rect.top ?? rect.y));
+  const right = Math.max(...rects.map((rect) => rect.right ?? rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom ?? rect.y + rect.height));
+  return {
+    x: round(left),
+    y: round(top),
+    width: round(right - left),
+    height: round(bottom - top)
+  };
+}
+
+function formatRect(rect) {
+  if (!rect) {
+    return "(无)";
+  }
+  return `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`;
+}
+
+function snapshotReference(reference) {
+  const element = reference.element;
+  const styles = element.styles;
+  const parent = element.parent;
+  return [
+    `${element.selector}`,
+    `rect ${formatRect(element.rect)}`,
+    `display ${styles.box.display}`,
+    `padding ${styles.box.padding}`,
+    `margin ${styles.box.margin}`,
+    `背景 ${styles.color.background}`,
+    `圆角 ${styles.box.borderRadius}`,
+    `阴影 ${styles.box.boxShadow}`,
+    `父级: ${parent?.selector ?? "(none)"}; display ${parent?.display ?? "(unknown)"}; gap ${parent?.gap ?? "(unknown)"}; padding ${parent?.padding ?? "(unknown)"}`
+  ].join("; ");
+}
+
+function groupSnapshotLines(group) {
+  const referenceLabel = group.references?.length === 1 ? "参考范围" : "参考范围";
+  const currentLabel = group.currentReferences?.length === 1 ? "当前范围" : "当前范围";
+  const lines = [
+    `### 组 ${group.index}：${group.name}`,
+    ...(group.references ?? []).map((reference, index) => {
+      const suffix = group.references.length === 1 ? "" : ` ${index + 1}`;
+      return `- ${referenceLabel}${suffix}: ${snapshotReference(reference)}`;
+    })
+  ];
+  if (group.currentReferences?.length > 0) {
+    lines.push(...group.currentReferences.map((reference, index) => {
+      const suffix = group.currentReferences.length === 1 ? "" : ` ${index + 1}`;
+      return `- ${currentLabel}${suffix}: ${snapshotReference(reference)}`;
+    }));
+  } else {
+    lines.push("- 当前范围: 还没有匹配当前实现元素");
+  }
+  return lines.join("\n");
+}
+
+function formatLayoutOverview(groupedDiff) {
+  return [
+    `参考整体边界: ${formatRect(groupedDiff.layout.referenceBounds)}`,
+    `当前整体边界: ${formatRect(groupedDiff.layout.currentBounds)}`,
+    ...groupedDiff.groups.map((group) => {
+      const referenceRect = unionRectFromGroups([group], "references");
+      const currentRect = unionRectFromGroups([group], "currentReferences");
+      return `组 ${group.index} ${group.name}: 参考 ${formatRect(referenceRect)} / 当前 ${formatRect(currentRect)}`;
+    })
+  ].join("\n");
+}
+
 export function createReferenceGroup(references, options = {}) {
   const savedAt = options.savedAt ?? new Date().toISOString();
   return {
@@ -44,6 +125,8 @@ export function compareReferenceGroups(groups) {
       status,
       referenceCount: group.references?.length ?? 0,
       currentCount: group.currentReferences?.length ?? 0,
+      references: group.references ?? [],
+      currentReferences: group.currentReferences ?? [],
       diff: group.diff ?? null
     };
   });
@@ -54,6 +137,10 @@ export function compareReferenceGroups(groups) {
       groups: normalizedGroups.length,
       compared: normalizedGroups.filter((group) => group.status === "compared").length,
       missingCurrent: normalizedGroups.filter((group) => group.status === "missing-current").length
+    },
+    layout: {
+      referenceBounds: unionRectFromGroups(normalizedGroups, "references"),
+      currentBounds: unionRectFromGroups(normalizedGroups, "currentReferences")
     },
     groups: normalizedGroups
   };
@@ -84,6 +171,12 @@ export function buildGroupedDiffPrompt(groupedDiff) {
     `已完成对比: ${groupedDiff.count.compared}`,
     `未匹配当前实现: ${groupedDiff.count.missingCurrent}`,
     "",
+    "## 整体布局关系",
+    formatLayoutOverview(groupedDiff),
+    "",
+    "## 参考组范围快照",
+    ...groupedDiff.groups.map(groupSnapshotLines),
+    "",
     "## 每组关键差异摘要",
     ...groupedDiff.groups.map(formatGroupSummary),
     "",
@@ -96,6 +189,8 @@ export function buildGroupedDiffPrompt(groupedDiff) {
       : ["还没有任何完成对比的组。"]),
     "",
     "## 修复要求",
+    "- 先确认每组选择范围是否一致。如果参考是白色卡片，当前也必须匹配外层卡片，不要只匹配内部图标或文字。",
+    "- 多组共同布局要整体还原，例如卡片外框、背景色、横向/网格排列、每组宽高和组间 gap。",
     "- 按组逐一修复，优先处理每组摘要里的尺寸、间距、字体、颜色和子元素差异。",
     "- 多个组共享的问题优先抽到共同父级布局、组件样式、design token 或复用 class 中。",
     "- 不要为了单个组使用大量 absolute positioning 或 transform 硬凑。",
