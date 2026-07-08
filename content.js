@@ -68,8 +68,8 @@
         <ol>
           <li>打开参考页，点击要还原的元素。</li>
           <li>选中范围太小时，点「选择父级」。</li>
-          <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + D 快速设为参考。</li>
-          <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + D 保存组，按 M 匹配组。</li>
+          <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
+          <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，Cmd / Ctrl + D 匹配组。</li>
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
       </details>
@@ -122,7 +122,7 @@
           <div class="urc-baseline-meta">先在参考页选中元素并保存，再到实现页对比。</div>
         </div>
         <div class="urc-button-row">
-          <button class="urc-secondary" type="button" data-action="set-baseline" title="快捷键：Cmd / Ctrl + D" disabled>设为参考</button>
+          <button class="urc-secondary" type="button" data-action="set-baseline" title="快捷键：Cmd / Ctrl + S" disabled>设为参考</button>
           <button class="urc-secondary" type="button" data-action="clear-baseline">清除参考</button>
         </div>
         <label class="urc-toggle-field">
@@ -149,8 +149,8 @@
           <select class="urc-select urc-group-select" data-group-select hidden></select>
         </div>
         <div class="urc-button-row">
-          <button class="urc-secondary" type="button" data-action="add-reference-group" title="快捷键：Cmd / Ctrl + D" disabled>保存新参考组</button>
-          <button class="urc-secondary" type="button" data-action="match-current-group" title="快捷键：M" disabled>匹配当前组</button>
+          <button class="urc-secondary" type="button" data-action="add-reference-group" title="快捷键：Cmd / Ctrl + S" disabled>保存新参考组</button>
+          <button class="urc-secondary" type="button" data-action="match-current-group" title="快捷键：Cmd / Ctrl + D" disabled>匹配当前组</button>
         </div>
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
@@ -738,7 +738,7 @@
         return;
       }
       const key = String(event.key || "").toLowerCase();
-      if (key === "d" && (event.metaKey || event.ctrlKey) && !event.altKey) {
+      if (key === "s" && (event.metaKey || event.ctrlKey) && !event.altKey) {
         event.preventDefault();
         event.stopPropagation();
         const action = state.settings.activeTab === "groups" ? addReferenceGroupWithFeedback : saveBaselineWithFeedback;
@@ -746,7 +746,7 @@
           setFeedback(`保存失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
         });
       }
-      if (key === "m" && !event.metaKey && !event.ctrlKey && !event.altKey && state.settings.activeTab === "groups") {
+      if (key === "d" && (event.metaKey || event.ctrlKey) && !event.altKey && state.settings.activeTab === "groups") {
         event.preventDefault();
         event.stopPropagation();
         void matchCurrentGroupWithFeedback().catch((error) => {
