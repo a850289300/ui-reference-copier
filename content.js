@@ -68,7 +68,7 @@
         <ol>
           <li>打开参考页，点击要还原的元素。</li>
           <li>选中范围太小时，点「选择父级」。</li>
-          <li>单个区域用「设为参考」和「对比参考」。</li>
+          <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
           <li>多个区域用「保存新参考组」和「匹配当前组」。</li>
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
@@ -122,7 +122,7 @@
           <div class="urc-baseline-meta">先在参考页选中元素并保存，再到实现页对比。</div>
         </div>
         <div class="urc-button-row">
-          <button class="urc-secondary" type="button" data-action="set-baseline" disabled>设为参考</button>
+          <button class="urc-secondary" type="button" data-action="set-baseline" title="快捷键：Cmd / Ctrl + S" disabled>设为参考</button>
           <button class="urc-secondary" type="button" data-action="clear-baseline">清除参考</button>
         </div>
         <label class="urc-toggle-field">
@@ -228,6 +228,11 @@
 
   function isOwnEvent(event) {
     return event.composedPath().some((item) => item === root);
+  }
+
+  function isEditableTarget(target) {
+    const element = target instanceof Element ? target : null;
+    return Boolean(element?.closest("input, textarea, select, [contenteditable='true']"));
   }
 
   function frameStyleFor(element) {
@@ -339,6 +344,16 @@
     state.baseline = baseline;
     state.lastDiff = null;
     renderBaselineStatus();
+  }
+
+  async function saveBaselineWithFeedback() {
+    if (state.references.length === 0) {
+      setFeedback("请先选择一个元素。", "error");
+      return false;
+    }
+    await saveBaseline();
+    setFeedback(`已保存 ${state.references.length} 个参考元素，可切换页面对比。`);
+    return true;
   }
 
   async function saveGroups(groups) {
@@ -693,6 +708,18 @@
     (event) => {
       if (event.key === "Escape" && state.active) {
         deactivate();
+        return;
+      }
+      if (!state.active || isEditableTarget(event.target)) {
+        return;
+      }
+      const key = String(event.key || "").toLowerCase();
+      if (key === "s" && (event.metaKey || event.ctrlKey) && !event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        void saveBaselineWithFeedback().catch((error) => {
+          setFeedback(`保存参考失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+        });
       }
     },
     { capture: true, signal: lifecycle.signal }
@@ -793,8 +820,7 @@
         setFeedback("已复制 JSON 到剪贴板。");
       }
       if (action === "set-baseline") {
-        await saveBaseline();
-        setFeedback(`已保存 ${state.references.length} 个参考元素，可切换页面对比。`);
+        await saveBaselineWithFeedback();
       }
       if (action === "add-reference-group") {
         const group = await addReferenceGroup();
