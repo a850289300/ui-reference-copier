@@ -41,7 +41,8 @@
     lastCopied: "",
     panelDrag: null,
     settings: {
-      childDepth: "standard"
+      childDepth: "standard",
+      activeTab: "capture"
     }
   };
 
@@ -71,7 +72,13 @@
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
       </details>
-      <section class="urc-section">
+      <nav class="urc-tabs" aria-label="功能切换">
+        <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="capture">采集</button>
+        <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="compare">单组对比</button>
+        <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="groups">多组对比</button>
+      </nav>
+      <div class="urc-tab-panel" data-tab-panel="capture">
+        <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前目标</p>
           <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
@@ -97,7 +104,9 @@
         <button class="urc-secondary" type="button" data-action="copy-full-style" disabled>复制完整样式</button>
         <button class="urc-secondary" type="button" data-action="copy-json" disabled>复制 JSON</button>
       </div>
-      <section class="urc-section">
+      </div>
+      <div class="urc-tab-panel" data-tab-panel="compare" hidden>
+        <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">跨页面对比</p>
           <span class="urc-status-pill" data-baseline-state="empty">未设置</span>
@@ -114,8 +123,11 @@
           <button class="urc-secondary" type="button" data-action="compare-baseline" disabled>对比参考</button>
           <button class="urc-primary" type="button" data-action="copy-diff" disabled>复制差异给 AI</button>
         </div>
+        <pre class="urc-summary urc-report" data-diff-output>对比后会在这里显示差异摘要。</pre>
       </section>
-      <section class="urc-section">
+      </div>
+      <div class="urc-tab-panel" data-tab-panel="groups" hidden>
+        <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">多组对比</p>
           <span class="urc-status-pill" data-group-state="empty">0 组</span>
@@ -134,7 +146,9 @@
           <button class="urc-primary" type="button" data-action="copy-group-diff" disabled>复制全部差异</button>
         </div>
         <button class="urc-text-button" type="button" data-action="clear-groups">清空所有组</button>
+        <pre class="urc-summary urc-report" data-group-diff-output>对比全部组后会在这里显示按组差异。</pre>
       </section>
+      </div>
     </aside>
     <div class="urc-toast" role="status" hidden></div>
   `;
@@ -155,6 +169,7 @@
   const setBaselineButton = root.querySelector("[data-action='set-baseline']");
   const compareBaselineButton = root.querySelector("[data-action='compare-baseline']");
   const copyDiffButton = root.querySelector("[data-action='copy-diff']");
+  const diffOutputEl = root.querySelector("[data-diff-output]");
   const groupStatus = root.querySelector(".urc-group-status");
   const groupMeta = root.querySelector(".urc-group-meta");
   const groupPill = root.querySelector("[data-group-state]");
@@ -163,8 +178,11 @@
   const matchCurrentGroupButton = root.querySelector("[data-action='match-current-group']");
   const compareGroupsButton = root.querySelector("[data-action='compare-groups']");
   const copyGroupDiffButton = root.querySelector("[data-action='copy-group-diff']");
+  const groupDiffOutputEl = root.querySelector("[data-group-diff-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const selectParentButton = root.querySelector("[data-action='select-parent']");
+  const tabButtons = Array.from(root.querySelectorAll("[data-tab]"));
+  const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
 
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -252,7 +270,11 @@
     if (!CHILD_LIMITS[state.settings.childDepth]) {
       state.settings.childDepth = "standard";
     }
+    if (!["capture", "compare", "groups"].includes(state.settings.activeTab)) {
+      state.settings.activeTab = "capture";
+    }
     childDepthSelect.value = state.settings.childDepth;
+    renderActiveTab();
   }
 
   async function saveSettings(nextSettings) {
@@ -261,6 +283,28 @@
       ...nextSettings
     };
     await chrome.storage.local.set({ [SETTINGS_KEY]: state.settings });
+  }
+
+  function renderActiveTab() {
+    const activeTab = state.settings.activeTab;
+    tabButtons.forEach((button) => {
+      const active = button.dataset.tab === activeTab;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    tabPanels.forEach((panelNode) => {
+      panelNode.hidden = panelNode.dataset.tabPanel !== activeTab;
+    });
+    ensurePanelInViewport();
+  }
+
+  async function setActiveTab(tab) {
+    if (!["capture", "compare", "groups"].includes(tab)) {
+      return;
+    }
+    state.settings.activeTab = tab;
+    renderActiveTab();
+    await saveSettings({ activeTab: tab });
   }
 
   async function saveBaseline() {
@@ -610,6 +654,11 @@
       return;
     }
 
+    if (action === "set-tab") {
+      await setActiveTab(event.target.closest("[data-tab]")?.dataset.tab);
+      return;
+    }
+
     if (action === "close") {
       deactivate();
       return;
@@ -715,13 +764,13 @@
         }
         state.lastDiff = compareReferenceSets(state.baseline.references, state.references);
         copyDiffButton.disabled = false;
-        summaryEl.textContent = buildDiffPrompt(state.lastDiff);
+        diffOutputEl.textContent = buildDiffPrompt(state.lastDiff);
         setFeedback("已生成差异报告，可复制给 AI。");
       }
       if (action === "compare-groups") {
         state.lastGroupedDiff = compareReferenceGroups(state.groups);
         copyGroupDiffButton.disabled = false;
-        summaryEl.textContent = buildGroupedDiffPrompt(state.lastGroupedDiff);
+        groupDiffOutputEl.textContent = buildGroupedDiffPrompt(state.lastGroupedDiff);
         renderGroupsStatus();
         setFeedback("已生成多组差异报告，可复制给 AI。");
       }
@@ -808,7 +857,7 @@
       state.lastGroupedDiff = null;
       renderGroupsStatus();
     }
-    if (changes[SETTINGS_KEY]) {
+      if (changes[SETTINGS_KEY]) {
       state.settings = {
         ...state.settings,
         ...(changes[SETTINGS_KEY].newValue ?? {})
@@ -816,6 +865,7 @@
       if (childDepthSelect.value !== state.settings.childDepth) {
         childDepthSelect.value = state.settings.childDepth;
       }
+      renderActiveTab();
     }
   };
   chrome.storage.onChanged.addListener(storageChangedListener);

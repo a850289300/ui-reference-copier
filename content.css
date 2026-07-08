@@ -160,6 +160,38 @@
   margin: 3px 0;
 }
 
+#ui-reference-copier-root .urc-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 8px;
+  background: #f3f4f6;
+}
+
+#ui-reference-copier-root .urc-tab-button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  color: #4b5563;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer !important;
+}
+
+#ui-reference-copier-root .urc-tab-button.is-active {
+  color: #1d4ed8;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+#ui-reference-copier-root .urc-tab-panel[hidden] {
+  display: none;
+}
+
 #ui-reference-copier-root .urc-section {
   margin-top: 12px;
 }
@@ -305,6 +337,11 @@
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 11px;
   line-height: 1.5;
+}
+
+#ui-reference-copier-root .urc-report {
+  max-height: 160px;
+  margin-top: 10px;
 }
 
 #ui-reference-copier-root .urc-actions {
