@@ -69,7 +69,7 @@
           <li>打开参考页，点击要还原的元素。</li>
           <li>选中范围太小时，点「选择父级」。</li>
           <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
-          <li>多个区域用「保存新参考组」和「匹配当前组」。</li>
+          <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，Cmd / Ctrl + Enter 匹配组。</li>
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
       </details>
@@ -149,8 +149,8 @@
           <select class="urc-select urc-group-select" data-group-select hidden></select>
         </div>
         <div class="urc-button-row">
-          <button class="urc-secondary" type="button" data-action="add-reference-group" disabled>保存新参考组</button>
-          <button class="urc-secondary" type="button" data-action="match-current-group" disabled>匹配当前组</button>
+          <button class="urc-secondary" type="button" data-action="add-reference-group" title="快捷键：Cmd / Ctrl + S" disabled>保存新参考组</button>
+          <button class="urc-secondary" type="button" data-action="match-current-group" title="快捷键：Cmd / Ctrl + Enter" disabled>匹配当前组</button>
         </div>
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
@@ -376,6 +376,16 @@
     return group;
   }
 
+  async function addReferenceGroupWithFeedback() {
+    if (state.references.length === 0) {
+      setFeedback("请先选择一个元素。", "error");
+      return null;
+    }
+    const group = await addReferenceGroup();
+    setFeedback(`已保存参考组：${group.name}`);
+    return group;
+  }
+
   async function matchCurrentGroup() {
     const group = state.groups.find((item) => item.id === state.selectedGroupId);
     if (!group) {
@@ -385,6 +395,20 @@
     await saveGroups(state.groups.map((item) => item.id === group.id ? nextGroup : item));
     state.selectedGroupId = nextGroup.id;
     return nextGroup;
+  }
+
+  async function matchCurrentGroupWithFeedback() {
+    if (state.references.length === 0) {
+      setFeedback("请先选择一个元素。", "error");
+      return null;
+    }
+    const group = await matchCurrentGroup();
+    if (!group) {
+      setFeedback("请先保存一个参考组。", "error");
+      return null;
+    }
+    setFeedback(`已匹配当前组：${group.name}`);
+    return group;
   }
 
   async function clearGroups() {
@@ -717,8 +741,16 @@
       if (key === "s" && (event.metaKey || event.ctrlKey) && !event.altKey) {
         event.preventDefault();
         event.stopPropagation();
-        void saveBaselineWithFeedback().catch((error) => {
-          setFeedback(`保存参考失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+        const action = state.settings.activeTab === "groups" ? addReferenceGroupWithFeedback : saveBaselineWithFeedback;
+        void action().catch((error) => {
+          setFeedback(`保存失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+        });
+      }
+      if (key === "enter" && (event.metaKey || event.ctrlKey) && !event.altKey && state.settings.activeTab === "groups") {
+        event.preventDefault();
+        event.stopPropagation();
+        void matchCurrentGroupWithFeedback().catch((error) => {
+          setFeedback(`匹配失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
         });
       }
     },
@@ -823,16 +855,10 @@
         await saveBaselineWithFeedback();
       }
       if (action === "add-reference-group") {
-        const group = await addReferenceGroup();
-        setFeedback(`已保存参考组：${group.name}`);
+        await addReferenceGroupWithFeedback();
       }
       if (action === "match-current-group") {
-        const group = await matchCurrentGroup();
-        if (!group) {
-          setFeedback("请先保存一个参考组。", "error");
-          return;
-        }
-        setFeedback(`已匹配当前组：${group.name}`);
+        await matchCurrentGroupWithFeedback();
       }
       if (action === "compare-baseline") {
         if (!state.baseline) {
