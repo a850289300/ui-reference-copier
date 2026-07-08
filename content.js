@@ -69,7 +69,7 @@
           <li>打开参考页，点击要还原的元素。</li>
           <li>选中范围太小时，点「选择父级」。</li>
           <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
-          <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，Cmd / Ctrl + Enter 匹配组。</li>
+          <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，按 M 匹配组。</li>
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
       </details>
@@ -150,7 +150,7 @@
         </div>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="add-reference-group" title="快捷键：Cmd / Ctrl + S" disabled>保存新参考组</button>
-          <button class="urc-secondary" type="button" data-action="match-current-group" title="快捷键：Cmd / Ctrl + Enter" disabled>匹配当前组</button>
+          <button class="urc-secondary" type="button" data-action="match-current-group" title="快捷键：M" disabled>匹配当前组</button>
         </div>
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
@@ -746,7 +746,7 @@
           setFeedback(`保存失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
         });
       }
-      if (key === "enter" && (event.metaKey || event.ctrlKey) && !event.altKey && state.settings.activeTab === "groups") {
+      if (key === "m" && !event.metaKey && !event.ctrlKey && !event.altKey && state.settings.activeTab === "groups") {
         event.preventDefault();
         event.stopPropagation();
         void matchCurrentGroupWithFeedback().catch((error) => {
