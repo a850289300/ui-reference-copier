@@ -107,6 +107,7 @@
       </div>
       <div class="urc-tab-panel" data-tab-panel="compare" hidden>
         <section class="urc-section">
+        <div class="urc-target urc-target-compact" data-compare-selection>当前未选择元素</div>
         <div class="urc-section-heading">
           <p class="urc-label">跨页面对比</p>
           <span class="urc-status-pill" data-baseline-state="empty">未设置</span>
@@ -128,6 +129,7 @@
       </div>
       <div class="urc-tab-panel" data-tab-panel="groups" hidden>
         <section class="urc-section">
+        <div class="urc-target urc-target-compact" data-group-selection>当前未选择元素</div>
         <div class="urc-section-heading">
           <p class="urc-label">多组对比</p>
           <span class="urc-status-pill" data-group-state="empty">0 组</span>
@@ -158,6 +160,8 @@
   const selectedLayer = root.querySelector(".urc-selected-layer");
   const panel = root.querySelector(".urc-panel");
   const targetEl = root.querySelector(".urc-target");
+  const compareSelectionEl = root.querySelector("[data-compare-selection]");
+  const groupSelectionEl = root.querySelector("[data-group-selection]");
   const summaryEl = root.querySelector(".urc-summary");
   const feedbackEl = root.querySelector(".urc-toast");
   const copyPromptButton = root.querySelector("[data-action='copy-prompt']");
@@ -419,6 +423,25 @@
     copyGroupDiffButton.disabled = !state.lastGroupedDiff;
   }
 
+  function renderSelectionCard(container, references) {
+    if (references.length === 0) {
+      container.textContent = "当前未选择元素";
+      return;
+    }
+    const label = describeReferences(references);
+    container.replaceChildren();
+    const badgeNode = document.createElement("span");
+    badgeNode.className = "urc-target-badge";
+    badgeNode.textContent = "当前选中";
+    const titleNode = document.createElement("strong");
+    titleNode.className = "urc-target-title";
+    titleNode.textContent = label.title;
+    const detailNode = document.createElement("span");
+    detailNode.className = "urc-target-detail";
+    detailNode.textContent = label.detail;
+    container.append(badgeNode, titleNode, detailNode);
+  }
+
   function setFeedback(message, kind = "success") {
     feedbackEl.hidden = false;
     feedbackEl.textContent = message;
@@ -446,6 +469,8 @@
 
     if (references.length === 0) {
       targetEl.textContent = "还没有选择元素";
+      compareSelectionEl.textContent = "当前未选择元素";
+      groupSelectionEl.textContent = "当前未选择元素";
       summaryEl.textContent = "点击页面中的元素开始采集。";
       copyPromptButton.disabled = true;
       copyFullStyleButton.disabled = true;
@@ -460,6 +485,8 @@
       return;
     }
 
+    renderSelectionCard(compareSelectionEl, references);
+    renderSelectionCard(groupSelectionEl, references);
     const primary = references[references.length - 1];
     const { element } = primary;
     const selectionLabel = describeReferences(references);

@@ -120,6 +120,23 @@ assert.equal(result.count.groups, 2);
 assert.equal(result.count.compared, 1);
 assert.equal(result.groups[0].status, "compared");
 assert.equal(result.groups[1].status, "missing-current");
+assert.ok(result.groups[0].warnings.some((warning) => warning.includes("范围可能不一致")));
+
+const staleGroup = {
+  ...matchedA,
+  currentReferences: [
+    makeReference("div.generated-visit-fixed", 300, {
+      url: "http://localhost:3000",
+      title: "App",
+      text: "访问量",
+      background: "rgb(255, 255, 255)",
+      borderRadius: "4px"
+    })
+  ]
+};
+const recomputedResult = compareReferenceGroups([staleGroup]);
+assert.equal(recomputedResult.groups[0].diff.pairs[0].rect.width.delta, 0);
+assert.equal(recomputedResult.groups[0].diff.pairs[0].styles["color.background"], undefined);
 
 const prompt = buildGroupedDiffPrompt(result);
 assert.match(prompt, /多组元素对比/);
@@ -131,5 +148,7 @@ assert.match(prompt, /width: 参考 300px \/ 当前 284px/);
 assert.match(prompt, /参考范围: div\.visit-card/);
 assert.match(prompt, /背景 rgb\(255, 255, 255\)/);
 assert.match(prompt, /父级: div\.console; display grid; gap 16px/);
+assert.match(prompt, /范围检查/);
+assert.match(prompt, /范围可能不一致/);
 assert.match(prompt, /组 2：销售额卡片/);
 assert.match(prompt, /还没有匹配当前实现元素/);

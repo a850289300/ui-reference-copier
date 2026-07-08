@@ -56,6 +56,34 @@ function snapshotReference(reference) {
   ].join("; ");
 }
 
+function isVisibleCard(reference) {
+  const styles = reference.element.styles;
+  return styles.color.background !== "rgba(0, 0, 0, 0)" ||
+    styles.box.borderRadius !== "0px" ||
+    styles.box.boxShadow !== "none" ||
+    !String(styles.box.border ?? "").startsWith("0px");
+}
+
+function scopeWarnings(group) {
+  if (!group.currentReferences?.length) {
+    return [];
+  }
+
+  const warnings = [];
+  const pairCount = Math.min(group.references.length, group.currentReferences.length);
+  for (let index = 0; index < pairCount; index += 1) {
+    const reference = group.references[index];
+    const current = group.currentReferences[index];
+    if (isVisibleCard(reference) && !isVisibleCard(current)) {
+      warnings.push(`范围可能不一致：参考像外层卡片，但当前像内部图标/文字或透明容器。请重新选择当前外层卡片。`);
+    }
+    if (reference.element.parent?.display !== current.element.parent?.display) {
+      warnings.push(`父级布局不同：参考父级是 ${reference.element.parent?.display || "(unknown)"}，当前父级是 ${current.element.parent?.display || "(unknown)"}。`);
+    }
+  }
+  return Array.from(new Set(warnings));
+}
+
 function groupSnapshotLines(group) {
   const referenceLabel = group.references?.length === 1 ? "参考范围" : "参考范围";
   const currentLabel = group.currentReferences?.length === 1 ? "当前范围" : "当前范围";
@@ -89,6 +117,13 @@ function formatLayoutOverview(groupedDiff) {
   ].join("\n");
 }
 
+function recomputeGroupDiff(group) {
+  if (!group.currentReferences?.length) {
+    return null;
+  }
+  return compareReferenceSets(group.references, group.currentReferences);
+}
+
 export function createReferenceGroup(references, options = {}) {
   const savedAt = options.savedAt ?? new Date().toISOString();
   return {
@@ -117,7 +152,8 @@ export function attachCurrentToGroup(group, currentReferences, options = {}) {
 
 export function compareReferenceGroups(groups) {
   const normalizedGroups = groups.map((group, index) => {
-    const status = group.diff ? "compared" : "missing-current";
+    const diff = recomputeGroupDiff(group);
+    const status = diff ? "compared" : "missing-current";
     return {
       index: index + 1,
       id: group.id,
@@ -127,7 +163,8 @@ export function compareReferenceGroups(groups) {
       currentCount: group.currentReferences?.length ?? 0,
       references: group.references ?? [],
       currentReferences: group.currentReferences ?? [],
-      diff: group.diff ?? null
+      warnings: scopeWarnings(group),
+      diff
     };
   });
 
@@ -144,6 +181,19 @@ export function compareReferenceGroups(groups) {
     },
     groups: normalizedGroups
   };
+}
+
+function formatGroupWarnings(group) {
+  if (!group.warnings?.length) {
+    return [
+      `### 组 ${group.index}：${group.name}`,
+      "- 未发现明显范围风险。"
+    ].join("\n");
+  }
+  return [
+    `### 组 ${group.index}：${group.name}`,
+    ...group.warnings.map((warning) => `- ${warning}`)
+  ].join("\n");
 }
 
 function formatGroupSummary(group) {
@@ -176,6 +226,9 @@ export function buildGroupedDiffPrompt(groupedDiff) {
     "",
     "## 参考组范围快照",
     ...groupedDiff.groups.map(groupSnapshotLines),
+    "",
+    "## 范围检查",
+    ...groupedDiff.groups.map(formatGroupWarnings),
     "",
     "## 每组关键差异摘要",
     ...groupedDiff.groups.map(formatGroupSummary),

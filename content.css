@@ -269,6 +269,15 @@
   overflow-wrap: anywhere;
 }
 
+#ui-reference-copier-root .urc-target-compact {
+  min-height: 0;
+  margin-bottom: 10px;
+}
+
+#ui-reference-copier-root .urc-target-compact strong {
+  font-size: 14px;
+}
+
 #ui-reference-copier-root .urc-target strong {
   color: #111827;
   font-size: 16px;
