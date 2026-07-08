@@ -42,6 +42,7 @@
     panelDrag: null,
     settings: {
       childDepth: "standard",
+      includeIconDetails: false,
       activeTab: "capture"
     }
   };
@@ -98,6 +99,10 @@
             <option value="detailed">详细 · 100 个</option>
           </select>
         </label>
+        <label class="urc-toggle-field">
+          <input type="checkbox" data-setting="include-icon-details">
+          <span>采集图标细节</span>
+        </label>
       </section>
       <div class="urc-actions">
         <button class="urc-primary" type="button" data-action="copy-prompt" disabled>复制给 AI</button>
@@ -145,8 +150,9 @@
         </div>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-groups" disabled>对比全部组</button>
-          <button class="urc-primary" type="button" data-action="copy-group-diff" disabled>复制全部差异</button>
+          <button class="urc-primary" type="button" data-action="copy-group-diff" data-detail="compact" disabled>复制精简差异</button>
         </div>
+        <button class="urc-secondary urc-wide-button" type="button" data-action="copy-group-diff" data-detail="full" disabled>复制详细差异</button>
         <button class="urc-text-button" type="button" data-action="clear-groups">清空所有组</button>
         <pre class="urc-summary urc-report" data-group-diff-output>对比全部组后会在这里显示按组差异。</pre>
       </section>
@@ -181,9 +187,10 @@
   const addReferenceGroupButton = root.querySelector("[data-action='add-reference-group']");
   const matchCurrentGroupButton = root.querySelector("[data-action='match-current-group']");
   const compareGroupsButton = root.querySelector("[data-action='compare-groups']");
-  const copyGroupDiffButton = root.querySelector("[data-action='copy-group-diff']");
+  const copyGroupDiffButtons = Array.from(root.querySelectorAll("[data-action='copy-group-diff']"));
   const groupDiffOutputEl = root.querySelector("[data-group-diff-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
+  const includeIconDetailsInput = root.querySelector("[data-setting='include-icon-details']");
   const selectParentButton = root.querySelector("[data-action='select-parent']");
   const tabButtons = Array.from(root.querySelectorAll("[data-tab]"));
   const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
@@ -278,6 +285,7 @@
       state.settings.activeTab = "capture";
     }
     childDepthSelect.value = state.settings.childDepth;
+    includeIconDetailsInput.checked = Boolean(state.settings.includeIconDetails);
     renderActiveTab();
   }
 
@@ -420,7 +428,9 @@
     addReferenceGroupButton.disabled = state.references.length === 0;
     matchCurrentGroupButton.disabled = state.references.length === 0 || total === 0;
     compareGroupsButton.disabled = compared === 0;
-    copyGroupDiffButton.disabled = !state.lastGroupedDiff;
+    copyGroupDiffButtons.forEach((button) => {
+      button.disabled = !state.lastGroupedDiff;
+    });
   }
 
   function renderSelectionCard(container, references) {
@@ -532,9 +542,7 @@
   }
 
   function setSelection(element, additive) {
-    const options = {
-      childLimit: CHILD_LIMITS[state.settings.childDepth] ?? CHILD_LIMITS.standard
-    };
+    const options = captureOptions();
 
     if (!additive) {
       state.selected = [element];
@@ -560,9 +568,7 @@
   }
 
   function replaceSelectionAt(index, element) {
-    const options = {
-      childLimit: CHILD_LIMITS[state.settings.childDepth] ?? CHILD_LIMITS.standard
-    };
+    const options = captureOptions();
     state.selected[index] = element;
     state.references[index] = extractReferenceFromElement(element, options);
     state.lastDiff = null;
@@ -597,6 +603,13 @@
     textarea.select();
     document.execCommand("copy");
     textarea.remove();
+  }
+
+  function captureOptions() {
+    return {
+      childLimit: CHILD_LIMITS[state.settings.childDepth] ?? CHILD_LIMITS.standard,
+      includeIconDetails: Boolean(state.settings.includeIconDetails)
+    };
   }
 
   function activate() {
@@ -731,8 +744,9 @@
         return;
       }
       try {
-        await copyText(buildGroupedDiffPrompt(state.lastGroupedDiff));
-        setFeedback("已复制多组差异提示词到剪贴板。");
+        const detail = event.target.closest("[data-detail]")?.dataset.detail === "full" ? "full" : "compact";
+        await copyText(buildGroupedDiffPrompt(state.lastGroupedDiff, { detail }));
+        setFeedback(detail === "full" ? "已复制详细多组差异。" : "已复制精简多组差异。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }
@@ -796,7 +810,9 @@
       }
       if (action === "compare-groups") {
         state.lastGroupedDiff = compareReferenceGroups(state.groups);
-        copyGroupDiffButton.disabled = false;
+        copyGroupDiffButtons.forEach((button) => {
+          button.disabled = false;
+        });
         groupDiffOutputEl.textContent = buildGroupedDiffPrompt(state.lastGroupedDiff);
         renderGroupsStatus();
         setFeedback("已生成多组差异报告，可复制给 AI。");
@@ -816,6 +832,16 @@
       state.lastDiff = null;
       renderBaselineStatus();
       setFeedback("已更新子元素采样设置，下一次选择元素时生效。");
+    });
+  }, { signal: lifecycle.signal });
+
+  includeIconDetailsInput.addEventListener("change", () => {
+    void saveSettings({ includeIconDetails: includeIconDetailsInput.checked }).then(() => {
+      state.lastDiff = null;
+      state.lastGroupedDiff = null;
+      renderBaselineStatus();
+      renderGroupsStatus();
+      setFeedback(includeIconDetailsInput.checked ? "已开启图标细节采集，下一次选择元素时生效。" : "已关闭图标细节采集。");
     });
   }, { signal: lifecycle.signal });
 
@@ -892,6 +918,7 @@
       if (childDepthSelect.value !== state.settings.childDepth) {
         childDepthSelect.value = state.settings.childDepth;
       }
+      includeIconDetailsInput.checked = Boolean(state.settings.includeIconDetails);
       renderActiveTab();
     }
   };

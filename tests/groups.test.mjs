@@ -152,3 +152,10 @@ assert.match(prompt, /范围检查/);
 assert.match(prompt, /范围可能不一致/);
 assert.match(prompt, /组 2：销售额卡片/);
 assert.match(prompt, /还没有匹配当前实现元素/);
+assert.doesNotMatch(prompt, /## 每组详细差异/);
+assert.ok(prompt.split("\n").length < 120);
+
+const detailedPrompt = buildGroupedDiffPrompt(result, { detail: "full" });
+assert.match(detailedPrompt, /## 每组详细差异/);
+assert.match(detailedPrompt, /## 整体边界差异/);
+assert.ok(detailedPrompt.split("\n").length > prompt.split("\n").length);

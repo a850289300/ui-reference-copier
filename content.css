@@ -317,6 +317,21 @@
   gap: 6px;
 }
 
+#ui-reference-copier-root .urc-toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#ui-reference-copier-root .urc-toggle-field input {
+  width: 14px;
+  height: 14px;
+}
+
 #ui-reference-copier-root .urc-select {
   width: 100%;
   min-height: 34px;
@@ -365,6 +380,11 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 10px;
+}
+
+#ui-reference-copier-root .urc-wide-button {
+  width: 100%;
+  margin-top: 8px;
 }
 
 #ui-reference-copier-root button {

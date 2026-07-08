@@ -56,6 +56,22 @@ function snapshotReference(reference) {
   ].join("; ");
 }
 
+function iconSnapshot(reference) {
+  const icons = reference.element.iconDetails ?? [];
+  if (icons.length === 0) {
+    return "";
+  }
+  return `图标: ${icons.map((icon) => {
+    if (icon.type === "svg") {
+      return `svg ${icon.selector} viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount}`;
+    }
+    if (icon.type === "img") {
+      return `img ${icon.selector} src ${icon.src || "(none)"}`;
+    }
+    return `css/iconfont ${icon.selector} class ${icon.className || "(none)"}`;
+  }).join("; ")}`;
+}
+
 function isVisibleCard(reference) {
   const styles = reference.element.styles;
   return styles.color.background !== "rgba(0, 0, 0, 0)" ||
@@ -91,13 +107,13 @@ function groupSnapshotLines(group) {
     `### 组 ${group.index}：${group.name}`,
     ...(group.references ?? []).map((reference, index) => {
       const suffix = group.references.length === 1 ? "" : ` ${index + 1}`;
-      return `- ${referenceLabel}${suffix}: ${snapshotReference(reference)}`;
+      return `- ${referenceLabel}${suffix}: ${[snapshotReference(reference), iconSnapshot(reference)].filter(Boolean).join("; ")}`;
     })
   ];
   if (group.currentReferences?.length > 0) {
     lines.push(...group.currentReferences.map((reference, index) => {
       const suffix = group.currentReferences.length === 1 ? "" : ` ${index + 1}`;
-      return `- ${currentLabel}${suffix}: ${snapshotReference(reference)}`;
+      return `- ${currentLabel}${suffix}: ${[snapshotReference(reference), iconSnapshot(reference)].filter(Boolean).join("; ")}`;
     }));
   } else {
     lines.push("- 当前范围: 还没有匹配当前实现元素");
@@ -211,9 +227,20 @@ function formatGroupSummary(group) {
   ].join("\n");
 }
 
-export function buildGroupedDiffPrompt(groupedDiff) {
+function formatDetailedDiffs(comparedGroups) {
+  if (comparedGroups.length === 0) {
+    return ["还没有任何完成对比的组。"];
+  }
+  return comparedGroups.flatMap((group) => [
+    `### 组 ${group.index}：${group.name}`,
+    buildDiffPrompt(group.diff)
+  ]);
+}
+
+export function buildGroupedDiffPrompt(groupedDiff, options = {}) {
   const comparedGroups = groupedDiff.groups.filter((group) => group.diff);
-  return [
+  const detail = options.detail ?? "compact";
+  const lines = [
     "请根据下面的多组元素对比结果调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
     "",
     "## 多组元素对比",
@@ -232,15 +259,18 @@ export function buildGroupedDiffPrompt(groupedDiff) {
     "",
     "## 每组关键差异摘要",
     ...groupedDiff.groups.map(formatGroupSummary),
-    "",
-    "## 每组详细差异",
-    ...(comparedGroups.length > 0
-      ? comparedGroups.flatMap((group) => [
-          `### 组 ${group.index}：${group.name}`,
-          buildDiffPrompt(group.diff)
-        ])
-      : ["还没有任何完成对比的组。"]),
-    "",
+    ""
+  ];
+
+  if (detail === "full") {
+    lines.push(
+      "## 每组详细差异",
+      ...formatDetailedDiffs(comparedGroups),
+      ""
+    );
+  }
+
+  lines.push(
     "## 修复要求",
     "- 先确认每组选择范围是否一致。如果参考是白色卡片，当前也必须匹配外层卡片，不要只匹配内部图标或文字。",
     "- 多组共同布局要整体还原，例如卡片外框、背景色、横向/网格排列、每组宽高和组间 gap。",
@@ -249,5 +279,7 @@ export function buildGroupedDiffPrompt(groupedDiff) {
     "- 不要为了单个组使用大量 absolute positioning 或 transform 硬凑。",
     "- 修复后建议再次使用插件逐组对比，确认差异是否收敛。",
     ""
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }

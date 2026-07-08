@@ -473,6 +473,58 @@ function collectChildSnapshots(element, parentRect, limit = DEFAULT_CHILD_SNAPSH
     });
 }
 
+function collectIconDetails(element) {
+  const icons = [];
+  const candidates = Array.from(element.querySelectorAll?.("svg,img,[class*='icon'],[class*='Icon'],i") ?? [])
+    .filter((child) => isElementLike(child) && isVisibleChild(child))
+    .slice(0, 12);
+
+  candidates.forEach((icon) => {
+    const tag = String(icon.tagName || "").toLowerCase();
+    const rect = getRect(icon);
+    const style = window.getComputedStyle(icon);
+    if (tag === "svg") {
+      const paths = Array.from(icon.querySelectorAll?.("path") ?? []);
+      const uses = Array.from(icon.querySelectorAll?.("use") ?? []);
+      icons.push({
+        type: "svg",
+        selector: buildSelectorSegment(icon),
+        rect,
+        viewBox: getAttribute(icon, "viewBox"),
+        pathCount: paths.length,
+        useHref: uses.map((item) => getAttribute(item, "href") || getAttribute(item, "xlink:href")).filter(Boolean).join(", "),
+        fill: getAttribute(icon, "fill") || readStyle(style, "fill"),
+        stroke: getAttribute(icon, "stroke") || readStyle(style, "stroke"),
+        color: readStyle(style, "color")
+      });
+      return;
+    }
+    if (tag === "img") {
+      icons.push({
+        type: "img",
+        selector: buildSelectorSegment(icon),
+        rect,
+        src: getAttribute(icon, "src"),
+        alt: getAttribute(icon, "alt"),
+        objectFit: readStyle(style, "objectFit")
+      });
+      return;
+    }
+    icons.push({
+      type: "font-or-css",
+      selector: buildSelectorSegment(icon),
+      rect,
+      className: classList(icon).join(" "),
+      color: readStyle(style, "color"),
+      fontFamily: readStyle(style, "fontFamily"),
+      backgroundImage: readStyle(style, "backgroundImage"),
+      maskImage: readStyle(style, "maskImage")
+    });
+  });
+
+  return icons;
+}
+
 export function extractReferenceFromElement(element, options = {}) {
   if (!element) {
     throw new Error("Missing element");
@@ -512,6 +564,7 @@ export function extractReferenceFromElement(element, options = {}) {
       fullComputedStyle: collectFullComputedStyle(style),
       styleVars: collectComponentStyleVars(style),
       children: collectChildSnapshots(element, rect, options.childLimit ?? DEFAULT_CHILD_SNAPSHOT_LIMIT),
+      iconDetails: options.includeIconDetails ? collectIconDetails(element) : undefined,
       parent: parentSummary(element),
       ancestorTrail: buildAncestorTrail(element)
     }

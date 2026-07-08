@@ -114,6 +114,28 @@ function buildChildrenBlock(element) {
   ]);
 }
 
+function formatIconDetail(icon, index) {
+  const rect = icon.rect ?? {};
+  if (icon.type === "svg") {
+    return `${index + 1}. svg ${icon.selector}; rect ${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}; viewBox ${icon.viewBox || "(none)"}; path ${icon.pathCount}; use ${icon.useHref || "(none)"}; fill ${icon.fill || "(auto)"}; stroke ${icon.stroke || "(auto)"}; color ${icon.color || "(auto)"}`;
+  }
+  if (icon.type === "img") {
+    return `${index + 1}. img ${icon.selector}; rect ${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}; src ${icon.src || "(none)"}; alt ${icon.alt || "(none)"}; object-fit ${icon.objectFit || "(auto)"}`;
+  }
+  return `${index + 1}. css/iconfont ${icon.selector}; rect ${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}; class ${icon.className || "(none)"}; font ${icon.fontFamily || "(none)"}; color ${icon.color || "(auto)"}; background ${icon.backgroundImage || "(none)"}; mask ${icon.maskImage || "(none)"}`;
+}
+
+function buildIconBlock(element) {
+  const icons = element.iconDetails ?? [];
+  if (icons.length === 0) {
+    return "";
+  }
+  return block("图标采集摘要", [
+    `共采集 ${icons.length} 个图标。只在插件开启「采集图标细节」时出现：`,
+    ...icons.map(formatIconDetail)
+  ]);
+}
+
 function unionRect(references) {
   const rects = references.map((item) => item.element.rect);
   const left = Math.min(...rects.map((rect) => rect.left ?? rect.x));
@@ -196,6 +218,7 @@ export function buildAiPrompt(reference, target = "Codex / Claude Code", options
       line("Ancestor trail", element.ancestorTrail?.join(" > "))
     ]),
     buildChildrenBlock(element),
+    buildIconBlock(element),
     block("参考 HTML", ["```html", element.outerHTML, "```"]),
     includeFullComputedStyle
       ? block("完整 computed CSS", ["```css", `${element.selector} {`, fullStyleBlock, "}", "```"])
@@ -253,6 +276,19 @@ export function buildMultiAiPrompt(references, target = "Codex / Claude Code", o
         return [
           `目标 ${referenceIndex + 1} · ${reference.element.selector} · 子元素 ${children.length} 个：`,
           ...children.map((child, childIndex) => formatChildSnapshot(child, childIndex))
+        ];
+      })
+    ),
+    block(
+      "图标采集摘要",
+      references.flatMap((reference, referenceIndex) => {
+        const icons = reference.element.iconDetails ?? [];
+        if (icons.length === 0) {
+          return [];
+        }
+        return [
+          `目标 ${referenceIndex + 1} · ${reference.element.selector} · 图标 ${icons.length} 个：`,
+          ...icons.map(formatIconDetail)
         ];
       })
     ),

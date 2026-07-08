@@ -95,6 +95,47 @@ function createElementStub() {
     }
   };
 
+  const iconChild = {
+    tagName: "svg",
+    id: "",
+    classList: ["icon-user"],
+    textContent: "",
+    parentElement: null,
+    children: [],
+    outerHTML: "<svg class=\"icon-user\" viewBox=\"0 0 24 24\"><path d=\"M1 2L3 4\"></path><path d=\"M5 6L7 8\"></path></svg>",
+    getAttribute(name) {
+      return {
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor"
+      }[name] ?? null;
+    },
+    matches(selector) {
+      return selector.includes("svg");
+    },
+    querySelectorAll(selector) {
+      if (selector.includes("path")) {
+        return [
+          { tagName: "path", getAttribute: (name) => name === "d" ? "M1 2L3 4" : null },
+          { tagName: "path", getAttribute: (name) => name === "d" ? "M5 6L7 8" : null }
+        ];
+      }
+      return [];
+    },
+    getBoundingClientRect() {
+      return {
+        x: 130,
+        y: 206,
+        width: 24,
+        height: 24,
+        top: 206,
+        right: 154,
+        bottom: 230,
+        left: 130
+      };
+    }
+  };
+
   const parent = {
     tagName: "MAIN",
     id: "",
@@ -118,7 +159,13 @@ function createElementStub() {
       return selector.includes("button");
     },
     querySelectorAll(selector) {
-      return selector.includes("div[class]") ? [labelChild, cardChild, progressFillChild] : [labelChild];
+      if (selector.includes("div[class]")) {
+        return [labelChild, cardChild, progressFillChild, iconChild];
+      }
+      if (selector.includes("[class*='icon']") || selector.includes("svg")) {
+        return [iconChild];
+      }
+      return [labelChild];
     },
     getAttribute(name) {
       return {
@@ -144,7 +191,8 @@ function createElementStub() {
   labelChild.parentElement = element;
   cardChild.parentElement = element;
   progressFillChild.parentElement = element;
-  element.children = [labelChild, cardChild, progressFillChild];
+  iconChild.parentElement = element;
+  element.children = [labelChild, cardChild, progressFillChild, iconChild];
   parent.children = [element];
 
   return element;
@@ -257,6 +305,8 @@ globalThis.document = {
 
 const reference = extractReferenceFromElement(createElementStub());
 const noChildrenReference = extractReferenceFromElement(createElementStub(), { childLimit: 0 });
+const iconReferenceDisabled = extractReferenceFromElement(createElementStub(), { includeIconDetails: false });
+const iconReferenceEnabled = extractReferenceFromElement(createElementStub(), { includeIconDetails: true });
 
 assert.equal(reference.page.url, "https://example.com/prototype");
 assert.equal(reference.element.tag, "button");
@@ -269,7 +319,7 @@ assert.equal(reference.element.parent.gap, "24px");
 assert.ok(reference.element.outerHTML.length < 600);
 assert.equal(reference.element.fullComputedStyle["font-size"], "16px");
 assert.equal(reference.element.fullComputedStyle.display, "inline-flex");
-assert.equal(reference.element.children.length, 3);
+assert.equal(reference.element.children.length, 4);
 const labelSnapshot = reference.element.children.find((child) => child.selector === "span.label");
 const cardSnapshot = reference.element.children.find((child) => child.selector === "div.n-card.n-card--content-segmented");
 const progressFillSnapshot = reference.element.children.find((child) => child.selector === "div.n-progress-graph-line-fill.n-progress-graph-line-fill--processing");
@@ -291,4 +341,9 @@ assert.equal(progressFillSnapshot.styles.transform, "translateX(0px)");
 assert.equal(progressFillSnapshot.styles.transitionDuration, "0.3s");
 assert.equal(progressFillSnapshot.styleVars["--n-fill-color"], "rgb(32, 128, 240)");
 assert.equal(noChildrenReference.element.children.length, 0);
+assert.equal(iconReferenceDisabled.element.iconDetails, undefined);
+assert.equal(iconReferenceEnabled.element.iconDetails.length, 1);
+assert.equal(iconReferenceEnabled.element.iconDetails[0].type, "svg");
+assert.equal(iconReferenceEnabled.element.iconDetails[0].viewBox, "0 0 24 24");
+assert.equal(iconReferenceEnabled.element.iconDetails[0].pathCount, 2);
 assert.ok(STYLE_GROUPS.font.includes("fontFamily"));
