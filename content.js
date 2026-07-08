@@ -387,14 +387,25 @@
   }
 
   async function matchCurrentGroup() {
-    const group = state.groups.find((item) => item.id === state.selectedGroupId);
+    const groupIndex = state.groups.findIndex((item) => item.id === state.selectedGroupId);
+    const group = state.groups[groupIndex];
     if (!group) {
       return null;
     }
     const nextGroup = attachCurrentToGroup(group, state.references);
-    await saveGroups(state.groups.map((item) => item.id === group.id ? nextGroup : item));
-    state.selectedGroupId = nextGroup.id;
-    return nextGroup;
+    const groups = state.groups.map((item) => item.id === group.id ? nextGroup : item);
+    const nextUnmatched = [
+      ...groups.slice(groupIndex + 1),
+      ...groups.slice(0, groupIndex)
+    ].find((item) => !item.currentReferences?.length);
+
+    await saveGroups(groups);
+    state.selectedGroupId = nextUnmatched?.id ?? nextGroup.id;
+    renderGroupsStatus();
+    return {
+      matched: nextGroup,
+      next: nextUnmatched ?? null
+    };
   }
 
   async function matchCurrentGroupWithFeedback() {
@@ -402,13 +413,15 @@
       setFeedback("请先选择一个元素。", "error");
       return null;
     }
-    const group = await matchCurrentGroup();
-    if (!group) {
+    const result = await matchCurrentGroup();
+    if (!result) {
       setFeedback("请先保存一个参考组。", "error");
       return null;
     }
-    setFeedback(`已匹配当前组：${group.name}`);
-    return group;
+    setFeedback(result.next
+      ? `已匹配：${result.matched.name}，已切到下一组：${result.next.name}`
+      : `已匹配：${result.matched.name}，所有参考组都已匹配。`);
+    return result.matched;
   }
 
   async function clearGroups() {
