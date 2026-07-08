@@ -61,6 +61,16 @@
         <button class="urc-icon-button" type="button" data-action="close" title="关闭">×</button>
       </header>
       <p class="urc-note">悬停高亮，点击单选；按住 Cmd / Ctrl / Shift 点击可多选，然后复制给 Codex / Claude Code。</p>
+      <details class="urc-help">
+        <summary>使用说明</summary>
+        <ol>
+          <li>打开参考页，点击要还原的元素。</li>
+          <li>选中范围太小时，点「选择父级」。</li>
+          <li>单个区域用「设为参考」和「对比参考」。</li>
+          <li>多个区域用「保存新参考组」和「匹配当前组」。</li>
+          <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
+        </ol>
+      </details>
       <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前目标</p>

@@ -134,6 +134,32 @@
   line-height: 1.45;
 }
 
+#ui-reference-copier-root .urc-help {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1f2937;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#ui-reference-copier-root .urc-help summary {
+  color: #1d4ed8;
+  font-weight: 800;
+  cursor: pointer !important;
+}
+
+#ui-reference-copier-root .urc-help ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+#ui-reference-copier-root .urc-help li {
+  margin: 3px 0;
+}
+
 #ui-reference-copier-root .urc-section {
   margin-top: 12px;
 }
