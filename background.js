@@ -27,6 +27,20 @@ async function ensureInjected(tabId) {
   INJECTED_TABS.add(tabId);
 }
 
+async function sendToggleMessage(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "ui-reference-copier/toggle" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("Receiving end does not exist")) {
+      throw error;
+    }
+    INJECTED_TABS.delete(tabId);
+    await ensureInjected(tabId);
+    await chrome.tabs.sendMessage(tabId, { type: "ui-reference-copier/toggle" });
+  }
+}
+
 chrome.action.onClicked.addListener(async () => {
   const tab = await getActiveTab();
   if (!tab?.id || !isSupportedUrl(tab.url)) {
@@ -34,7 +48,7 @@ chrome.action.onClicked.addListener(async () => {
   }
 
   await ensureInjected(tab.id);
-  await chrome.tabs.sendMessage(tab.id, { type: "ui-reference-copier/toggle" });
+  await sendToggleMessage(tab.id);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -46,4 +60,3 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     INJECTED_TABS.delete(tabId);
   }
 });
-

@@ -1,8 +1,7 @@
 (async () => {
-  if (window.__UI_REFERENCE_COPIER_BOOTED__) {
-    return;
-  }
-  window.__UI_REFERENCE_COPIER_BOOTED__ = true;
+  window.__UI_REFERENCE_COPIER_ABORT__?.abort?.();
+  const lifecycle = new AbortController();
+  window.__UI_REFERENCE_COPIER_ABORT__ = lifecycle;
 
   const [
     { extractReferenceFromElement },
@@ -47,6 +46,7 @@
   };
 
   const root = document.createElement("div");
+  document.getElementById("ui-reference-copier-root")?.remove();
   root.id = "ui-reference-copier-root";
   root.setAttribute("data-ui-reference-copier", "true");
   root.innerHTML = `
@@ -559,7 +559,7 @@
       );
       applyFrame(hoverBox, state.hovered);
     },
-    true
+    { capture: true, signal: lifecycle.signal }
   );
 
   document.addEventListener(
@@ -581,7 +581,7 @@
       renderSelection();
       setFeedback(state.references.length > 1 ? `已选择 ${state.references.length} 个元素。` : "已采集元素，可复制给 AI。");
     },
-    true
+    { capture: true, signal: lifecycle.signal }
   );
 
   document.addEventListener(
@@ -591,7 +591,7 @@
         deactivate();
       }
     },
-    true
+    { capture: true, signal: lifecycle.signal }
   );
 
   root.addEventListener("click", async (event) => {
@@ -718,12 +718,12 @@
     } catch (error) {
       setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
     }
-  });
+  }, { signal: lifecycle.signal });
 
   groupSelect.addEventListener("change", () => {
     state.selectedGroupId = groupSelect.value;
     renderGroupsStatus();
-  });
+  }, { signal: lifecycle.signal });
 
   childDepthSelect.addEventListener("change", () => {
     void saveSettings({ childDepth: childDepthSelect.value }).then(() => {
@@ -731,7 +731,7 @@
       renderBaselineStatus();
       setFeedback("已更新子元素采样设置，下一次选择元素时生效。");
     });
-  });
+  }, { signal: lifecycle.signal });
 
   root.addEventListener("pointerdown", (event) => {
     if (event.target?.closest?.("[data-action]")) {
@@ -751,7 +751,7 @@
     panel.setPointerCapture?.(event.pointerId);
     panel.classList.add("is-dragging");
     event.preventDefault();
-  });
+  }, { signal: lifecycle.signal });
 
   root.addEventListener("pointermove", (event) => {
     if (!state.panelDrag) {
@@ -761,7 +761,7 @@
       state.panelDrag.originLeft + event.clientX - state.panelDrag.startX,
       state.panelDrag.originTop + event.clientY - state.panelDrag.startY
     );
-  });
+  }, { signal: lifecycle.signal });
 
   root.addEventListener("pointerup", (event) => {
     if (!state.panelDrag) {
@@ -770,17 +770,18 @@
     state.panelDrag = null;
     panel.releasePointerCapture?.(event.pointerId);
     panel.classList.remove("is-dragging");
-  });
+  }, { signal: lifecycle.signal });
 
-  window.addEventListener("resize", ensurePanelInViewport);
+  window.addEventListener("resize", ensurePanelInViewport, { signal: lifecycle.signal });
 
-  chrome.runtime.onMessage.addListener((message) => {
+  const runtimeMessageListener = (message) => {
     if (message?.type === "ui-reference-copier/toggle") {
       toggle();
     }
-  });
+  };
+  chrome.runtime.onMessage.addListener(runtimeMessageListener);
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  const storageChangedListener = (changes, areaName) => {
     if (areaName !== "local") {
       return;
     }
@@ -806,7 +807,15 @@
         childDepthSelect.value = state.settings.childDepth;
       }
     }
-  });
+  };
+  chrome.storage.onChanged.addListener(storageChangedListener);
+
+  lifecycle.signal.addEventListener("abort", () => {
+    chrome.runtime.onMessage.removeListener(runtimeMessageListener);
+    chrome.storage.onChanged.removeListener(storageChangedListener);
+    document.documentElement.classList.remove("urc-active-page");
+    root.remove();
+  }, { once: true });
 
   void Promise.all([loadBaseline(), loadGroups(), loadSettings()]);
 })();
