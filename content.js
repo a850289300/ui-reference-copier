@@ -112,6 +112,10 @@
       </div>
       <div class="urc-tab-panel" data-tab-panel="compare" hidden>
         <section class="urc-section">
+        <div class="urc-section-heading">
+          <p class="urc-label">当前选择</p>
+          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+        </div>
         <div class="urc-target urc-target-compact" data-compare-selection>当前未选择元素</div>
         <div class="urc-section-heading">
           <p class="urc-label">跨页面对比</p>
@@ -138,6 +142,10 @@
       </div>
       <div class="urc-tab-panel" data-tab-panel="groups" hidden>
         <section class="urc-section">
+        <div class="urc-section-heading">
+          <p class="urc-label">当前选择</p>
+          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+        </div>
         <div class="urc-target urc-target-compact" data-group-selection>当前未选择元素</div>
         <div class="urc-section-heading">
           <p class="urc-label">多组对比</p>
@@ -199,7 +207,7 @@
   const groupDiffOutputEl = root.querySelector("[data-group-diff-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
-  const selectParentButton = root.querySelector("[data-action='select-parent']");
+  const selectParentButtons = Array.from(root.querySelectorAll("[data-action='select-parent']"));
   const tabButtons = Array.from(root.querySelectorAll("[data-tab]"));
   const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
 
@@ -549,7 +557,9 @@
       copyJsonButton.disabled = true;
       setBaselineButton.disabled = true;
       addReferenceGroupButton.disabled = true;
-      selectParentButton.disabled = true;
+      selectParentButtons.forEach((button) => {
+        button.disabled = true;
+      });
       compareBaselineButton.disabled = true;
       copyDiffButton.disabled = true;
       matchCurrentGroupButton.disabled = state.groups.length === 0;
@@ -596,7 +606,10 @@
     setBaselineButton.disabled = false;
     addReferenceGroupButton.disabled = false;
     matchCurrentGroupButton.disabled = state.groups.length === 0;
-    selectParentButton.disabled = !state.selected.some((element) => selectableParent(element));
+    const canSelectParent = state.selected.some((element) => selectableParent(element));
+    selectParentButtons.forEach((button) => {
+      button.disabled = !canSelectParent;
+    });
     compareBaselineButton.disabled = !state.baseline;
     copyDiffButton.disabled = !state.lastDiff;
     renderBaselineStatus();
