@@ -413,6 +413,15 @@
     return `#${parts.slice(0, 3).map((part) => Math.max(0, Math.min(255, Math.round(part))).toString(16).padStart(2, "0")).join("")}`;
   }
 
+  function hexToRgb(value) {
+    const hex = String(value || "").trim().replace(/^#/, "");
+    if (!/^[\da-f]{6}$/i.test(hex)) {
+      return value;
+    }
+    const parts = [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
+    return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+  }
+
   function shortSelector(element) {
     const tag = String(element?.tagName || "element").toLowerCase();
     const id = element?.id ? `#${element.id}` : "";
@@ -453,6 +462,31 @@
       tag: String(element?.tagName || "").toLowerCase(),
       text: shortText(element)
     };
+  }
+
+  function nativeColorSample(hex) {
+    return {
+      kind: "屏幕像素颜色",
+      value: hexToRgb(hex),
+      hex,
+      selector: "Chrome EyeDropper",
+      tag: "screen",
+      text: "",
+      point: null,
+      page: {
+        url: location.href,
+        title: document.title
+      },
+      capturedAt: new Date().toISOString()
+    };
+  }
+
+  async function openNativeEyeDropper() {
+    if (!globalThis.EyeDropper) {
+      return null;
+    }
+    const result = await new globalThis.EyeDropper().open();
+    return result?.sRGBHex ? nativeColorSample(result.sRGBHex) : null;
   }
 
   function canvasPixelCandidate(canvas, point) {
@@ -1418,13 +1452,32 @@
     }
 
     if (action === "toggle-color-picker") {
+      if (!state.colorPicking) {
+        try {
+          const sample = await openNativeEyeDropper();
+          if (sample) {
+            await saveColorWorkflow({
+              samples: [...state.colorSamples, sample],
+              target: state.colorTarget,
+              applyMode: state.colorApplyMode
+            });
+            setFeedback(`已吸取屏幕像素颜色：${sample.hex}`);
+            return;
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            setFeedback("已取消吸色。", "info");
+            return;
+          }
+        }
+      }
       state.colorPicking = !state.colorPicking;
       if (state.colorPicking) {
         state.colorTargetPicking = false;
       }
       renderActiveTab();
       renderColorSamples();
-      setFeedback(state.colorPicking ? "吸色已开启，点击页面上的颜色点。" : "吸色已停止。", state.colorPicking ? "info" : "success");
+      setFeedback(state.colorPicking ? "当前浏览器不支持原生吸管，已切换为页面样式吸色模式。" : "吸色已停止。", state.colorPicking ? "info" : "success");
       return;
     }
 
