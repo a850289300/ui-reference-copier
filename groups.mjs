@@ -283,6 +283,7 @@ export function buildGroupedDiffPrompt(groupedDiff, options = {}) {
     ...groupedDiff.groups.map(formatGroupWarnings),
     "",
     "## 结构风险提示",
+    "如果某一组提示结构不一致，先不要按样式差异硬改；优先重新选择同层级元素，或先补齐当前项目的布局结构。",
     ...groupedDiff.groups.map(formatGroupStructureRisks),
     "",
     "## 每组关键差异摘要",

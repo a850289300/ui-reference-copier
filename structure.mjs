@@ -206,9 +206,13 @@ export function structureRiskLines(structureDiff) {
   if (!structureDiff || structureDiff.severity === "low") {
     return [];
   }
+  const isHigh = structureDiff.severity === "high";
   return [
-    `结构风险: ${structureDiff.severity === "high" ? "高" : "中"}，最低结构相似度 ${structureDiff.score}/100。`,
-    "建议先使用「结构对比」修正布局/DOM/组件层级，再处理颜色、字体、间距等样式差异。",
+    `${isHigh ? "严重提醒" : "注意"}：结构${isHigh ? "明显不一致" : "可能不一致"}，最低结构相似度 ${structureDiff.score}/100。`,
+    isHigh
+      ? "先不要修颜色、字体、间距。很可能选错了元素层级，或当前页面缺少关键容器/布局区域。"
+      : "建议先确认元素层级是否一致，再处理颜色、字体、间距等样式差异。",
+    "请优先使用「结构对比」修正 DOM / 组件 / 布局层级；结构对齐后再做样式对比。",
     ...structureDiff.pairs.flatMap((pair) => pair.warnings.map((warning) => `元素 ${pair.index}: ${warning}`)).slice(0, 6)
   ];
 }
@@ -250,11 +254,18 @@ function formatPair(pair) {
 }
 
 export function buildStructurePrompt(structureDiff) {
+  const risks = structureRiskLines(structureDiff);
   return [
     "请先调整当前项目的 DOM / 组件 / 布局结构，让当前实现与参考元素的视觉结构对齐。",
     "",
     "不要先处理颜色、字体等细节样式。当前任务优先修复层级、容器、顺序和关键区域缺失。",
     "",
+    risks.length > 0 ? [
+      "## 先停一下：结构不一致",
+      ...risks.map((line) => `- ${line}`),
+      "- 如果当前选中的元素不是同一层级，请先重新选择；如果选择正确，请先补齐缺失结构，再继续。",
+      ""
+    ].join("\n") : "",
     "## 页面",
     `参考页: ${structureDiff.pages.reference?.url ?? "(未知)"}`,
     `当前实现页: ${structureDiff.pages.current?.url ?? "(未知)"}`,
@@ -262,7 +273,7 @@ export function buildStructurePrompt(structureDiff) {
     `最低结构相似度: ${structureDiff.score}/100 (${structureDiff.severity})`,
     "",
     "## 结构风险摘要",
-    ...(structureRiskLines(structureDiff).length > 0 ? structureRiskLines(structureDiff).map((line) => `- ${line}`) : ["- 未发现明显结构风险。"]),
+    ...(risks.length > 0 ? risks.map((line) => `- ${line}`) : ["- 未发现明显结构风险。"]),
     "",
     "## 逐元素结构对比",
     ...structureDiff.pairs.map(formatPair),

@@ -110,12 +110,14 @@ const wrongInnerText = makeReference("span.generated-text", {
 const mismatch = compareStructureSets([referenceCard], [wrongInnerText]);
 assert.equal(mismatch.severity, "high");
 assert.ok(mismatch.score < 55);
-assert.ok(structureRiskLines(mismatch).some((line) => line.includes("结构风险: 高")));
+assert.ok(structureRiskLines(mismatch).some((line) => line.includes("严重提醒")));
+assert.ok(structureRiskLines(mismatch).some((line) => line.includes("先不要修颜色")));
 assert.ok(structureRiskLines(mismatch).some((line) => line.includes("结构对比")));
 assert.ok(mismatch.pairs[0].warnings.some((warning) => warning.includes("当前元素可能不是参考元素的同一层级")));
 
 const prompt = buildStructurePrompt(mismatch);
 assert.match(prompt, /请先调整当前项目的 DOM \/ 组件 \/ 布局结构/);
+assert.match(prompt, /先停一下：结构不一致/);
 assert.match(prompt, /不要先处理颜色、字体等细节样式/);
 assert.match(prompt, /当前项目要修改的元素: span\.generated-text/);
 assert.match(prompt, /参考 tag 分布/);

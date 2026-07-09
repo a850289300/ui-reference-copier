@@ -1043,7 +1043,10 @@
           setFeedback("请先保存结构参考和当前结构。", "error");
           return;
         }
-        setFeedback(`已生成结构对比，相似度 ${structureDiff.score}/100。`);
+        setFeedback(structureDiff.severity === "high"
+          ? `结构明显不一致，相似度 ${structureDiff.score}/100。先确认是否选错层级。`
+          : `已生成结构对比，相似度 ${structureDiff.score}/100。`,
+        structureDiff.severity === "high" ? "error" : "success");
       } catch (error) {
         setFeedback(`对比失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }
@@ -1109,7 +1112,10 @@
         state.lastDiff = compareReferenceSets(state.baseline.references, state.references);
         copyDiffButton.disabled = false;
         diffOutputEl.textContent = buildDiffPrompt(state.lastDiff);
-        setFeedback("已生成差异报告，可复制给 AI。");
+        setFeedback(state.lastDiff.structure?.severity === "high"
+          ? "结构明显不一致：先用结构对比确认层级，再修样式。"
+          : "已生成差异报告，可复制给 AI。",
+        state.lastDiff.structure?.severity === "high" ? "error" : "success");
       }
       if (action === "compare-groups") {
         state.lastGroupedDiff = compareReferenceGroups(state.groups);
@@ -1118,7 +1124,11 @@
         });
         groupDiffOutputEl.textContent = buildGroupedDiffPrompt(state.lastGroupedDiff);
         renderGroupsStatus();
-        setFeedback("已生成多组差异报告，可复制给 AI。");
+        const hasHighStructureRisk = state.lastGroupedDiff.groups.some((group) => group.diff?.structure?.severity === "high");
+        setFeedback(hasHighStructureRisk
+          ? "有分组结构明显不一致：先确认选中层级或补布局。"
+          : "已生成多组差异报告，可复制给 AI。",
+        hasHighStructureRisk ? "error" : "success");
       }
     } catch (error) {
       setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
