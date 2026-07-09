@@ -27,6 +27,7 @@
   const COLOR_KEY = "ui-reference-copier.colorWorkflow";
   const SETTINGS_KEY = "ui-reference-copier.settings";
   const CHILD_LIMITS = {
+    none: 0,
     compact: 20,
     standard: 50,
     detailed: 100
@@ -117,6 +118,7 @@
         <label class="urc-field">
           <span class="urc-label">子元素采样</span>
           <select class="urc-select" data-setting="child-depth">
+            <option value="none">不采集 · 只保留当前元素</option>
             <option value="compact">精简 · 20 个</option>
             <option value="standard" selected>标准 · 50 个</option>
             <option value="detailed">详细 · 100 个</option>
@@ -737,7 +739,7 @@
       ...state.settings,
       ...(result[SETTINGS_KEY] ?? {})
     };
-    if (!CHILD_LIMITS[state.settings.childDepth]) {
+    if (!Object.prototype.hasOwnProperty.call(CHILD_LIMITS, state.settings.childDepth)) {
       state.settings.childDepth = "standard";
     }
     if (!["capture", "compare", "groups", "structure", "color"].includes(state.settings.activeTab)) {
@@ -1319,8 +1321,11 @@
   }
 
   function captureOptions() {
+    const childDepth = state.settings.childDepth === "none" && state.settings.activeTab !== "capture"
+      ? "standard"
+      : state.settings.childDepth;
     return {
-      childLimit: CHILD_LIMITS[state.settings.childDepth] ?? CHILD_LIMITS.standard,
+      childLimit: CHILD_LIMITS[childDepth] ?? CHILD_LIMITS.standard,
       includeIconDetails: Boolean(state.settings.includeIconDetails)
     };
   }
