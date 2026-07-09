@@ -5,7 +5,7 @@
 
   const [
     { extractReferenceFromElement },
-    { buildColorPrompt, buildColorValues, buildColorVars, buildMultiAiPrompt, buildMultiJson },
+    { buildColorSamplePrompt, buildColorSampleValues, buildColorVars, buildMultiAiPrompt, buildMultiJson },
     { buildDiffPrompt, compareReferenceSets },
     { resolveSelectableElement, selectableParent },
     { describeReference, describeReferences },
@@ -47,6 +47,8 @@
     lastGroupedDiff: null,
     lastDiff: null,
     lastCopied: "",
+    colorPicking: false,
+    colorSamples: [],
     panelDrag: null,
     settings: {
       childDepth: "standard",
@@ -229,16 +231,21 @@
           <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
         </div>
         <div class="urc-target urc-target-compact" data-color-selection>当前未选择元素</div>
-        <p class="urc-note">只提取颜色、背景、边框、阴影、图标色和颜色变量，不要求 AI 改布局。</p>
+        <p class="urc-note">像吸管一样点击页面上的颜色点。默认只保存命中点颜色，不采集整个元素和子元素。</p>
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
-          <span>采集图标细节</span>
+          <span>元素颜色模式采集图标细节</span>
         </label>
-        <pre class="urc-summary urc-report" data-color-output>选中元素后会在这里显示颜色摘要。</pre>
+        <div class="urc-button-row">
+          <button class="urc-primary" type="button" data-action="toggle-color-picker">开始吸色</button>
+          <button class="urc-secondary" type="button" data-action="clear-color-samples" disabled>清空颜色</button>
+        </div>
+        <div class="urc-color-samples" data-color-samples>还没有吸取颜色</div>
+        <pre class="urc-summary urc-report" data-color-output>点击「开始吸色」，然后在页面上点一下要吸取的颜色。</pre>
         <div class="urc-actions">
           <button class="urc-primary" type="button" data-action="copy-color-prompt" disabled>复制颜色提示词</button>
           <button class="urc-secondary" type="button" data-action="copy-color-values" disabled>复制颜色值</button>
-          <button class="urc-secondary" type="button" data-action="copy-color-vars" disabled>复制 CSS 变量</button>
+          <button class="urc-secondary" type="button" data-action="copy-color-vars" disabled>复制元素颜色变量</button>
         </div>
       </section>
       </div>
@@ -286,6 +293,9 @@
   const copyStructureDetailButton = root.querySelector("[data-action='copy-structure-detail']");
   const structureOutputEl = root.querySelector("[data-structure-output]");
   const colorOutputEl = root.querySelector("[data-color-output]");
+  const colorSamplesEl = root.querySelector("[data-color-samples]");
+  const toggleColorPickerButton = root.querySelector("[data-action='toggle-color-picker']");
+  const clearColorSamplesButton = root.querySelector("[data-action='clear-color-samples']");
   const copyColorPromptButton = root.querySelector("[data-action='copy-color-prompt']");
   const copyColorValuesButton = root.querySelector("[data-action='copy-color-values']");
   const copyColorVarsButton = root.querySelector("[data-action='copy-color-vars']");
@@ -335,6 +345,157 @@
       width: `${Math.round(rect.width)}px`,
       height: `${Math.round(rect.height)}px`
     };
+  }
+
+  function readCss(style, name) {
+    return style.getPropertyValue?.(name) || style[name] || "";
+  }
+
+  function usefulColor(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized
+      && normalized !== "none"
+      && normalized !== "normal"
+      && normalized !== "auto"
+      && normalized !== "transparent"
+      && normalized !== "rgba(0, 0, 0, 0)"
+      && normalized !== "rgb(0, 0, 0, 0)";
+  }
+
+  function rgbToHex(value) {
+    const match = String(value || "").match(/rgba?\(([^)]+)\)/i);
+    if (!match) {
+      return value;
+    }
+    const parts = match[1].split(",").map((part) => Number.parseFloat(part.trim()));
+    if (parts.length < 3 || parts.slice(0, 3).some((part) => Number.isNaN(part))) {
+      return value;
+    }
+    return `#${parts.slice(0, 3).map((part) => Math.max(0, Math.min(255, Math.round(part))).toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function shortSelector(element) {
+    const tag = String(element?.tagName || "element").toLowerCase();
+    const id = element?.id ? `#${element.id}` : "";
+    const classes = Array.from(element?.classList ?? []).slice(0, 3).map((name) => `.${name}`).join("");
+    return `${tag}${id}${classes}`;
+  }
+
+  function shortText(element) {
+    return String(element?.innerText || element?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  }
+
+  function nearestSolidBackground(element) {
+    let current = element;
+    while (current && current !== document.documentElement) {
+      const style = window.getComputedStyle(current);
+      const background = readCss(style, "background-color");
+      if (usefulColor(background)) {
+        return {
+          value: background,
+          selector: shortSelector(current),
+          kind: current === element ? "背景色" : "祖先背景色"
+        };
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  function colorCandidate(kind, value, element) {
+    if (!usefulColor(value)) {
+      return null;
+    }
+    return {
+      kind,
+      value,
+      hex: rgbToHex(value),
+      selector: shortSelector(element),
+      tag: String(element?.tagName || "").toLowerCase(),
+      text: shortText(element)
+    };
+  }
+
+  function chooseColorSample(element, point) {
+    const style = window.getComputedStyle(element);
+    const tag = String(element.tagName || "").toLowerCase();
+    const candidates = [];
+    if (["svg", "path", "use", "circle", "rect", "line", "polyline", "polygon"].includes(tag)) {
+      candidates.push(colorCandidate("图标 fill", readCss(style, "fill"), element));
+      candidates.push(colorCandidate("图标 stroke", readCss(style, "stroke"), element));
+    }
+    const backgroundImage = readCss(style, "background-image");
+    if (usefulColor(backgroundImage)) {
+      candidates.push({
+        kind: "背景图/渐变",
+        value: backgroundImage,
+        hex: backgroundImage,
+        selector: shortSelector(element),
+        tag,
+        text: shortText(element)
+      });
+    }
+    candidates.push(colorCandidate("背景色", readCss(style, "background-color"), element));
+    candidates.push(colorCandidate("文本色", readCss(style, "color"), element));
+    candidates.push(colorCandidate("边框色", readCss(style, "border-top-color"), element));
+    const background = nearestSolidBackground(element);
+    if (background && background.selector !== shortSelector(element)) {
+      candidates.push({
+        ...background,
+        hex: rgbToHex(background.value),
+        tag,
+        text: shortText(element)
+      });
+    }
+    const sample = candidates.filter(Boolean)[0];
+    if (!sample) {
+      return null;
+    }
+    return {
+      ...sample,
+      point: {
+        x: Math.round(point.x),
+        y: Math.round(point.y)
+      },
+      page: {
+        url: location.href,
+        title: document.title
+      },
+      capturedAt: new Date().toISOString()
+    };
+  }
+
+  function renderColorSamples() {
+    const hasSamples = state.colorSamples.length > 0;
+    clearColorSamplesButton.disabled = !hasSamples;
+    copyColorPromptButton.disabled = !hasSamples;
+    copyColorValuesButton.disabled = !hasSamples;
+    copyColorVarsButton.disabled = state.references.length === 0;
+    toggleColorPickerButton.textContent = state.colorPicking ? "停止吸色" : "开始吸色";
+    toggleColorPickerButton.classList.toggle("is-active", state.colorPicking);
+
+    if (!hasSamples) {
+      colorSamplesEl.textContent = "还没有吸取颜色";
+      colorOutputEl.textContent = state.colorPicking
+        ? "吸色中：在页面上点击要吸取的颜色。"
+        : "点击「开始吸色」，然后在页面上点一下要吸取的颜色。";
+      return;
+    }
+
+    colorSamplesEl.replaceChildren(...state.colorSamples.map((sample, index) => {
+      const row = document.createElement("div");
+      row.className = "urc-color-sample";
+      const swatch = document.createElement("span");
+      swatch.className = "urc-color-swatch";
+      swatch.style.background = sample.value;
+      const text = document.createElement("span");
+      text.textContent = `${index + 1}. ${sample.hex || sample.value} · ${sample.kind}`;
+      const meta = document.createElement("small");
+      meta.textContent = sample.selector;
+      row.append(swatch, text, meta);
+      return row;
+    }));
+    colorOutputEl.textContent = buildColorSampleValues(state.colorSamples);
   }
 
   function applyFrame(box, element) {
@@ -416,6 +577,7 @@
     tabPanels.forEach((panelNode) => {
       panelNode.hidden = panelNode.dataset.tabPanel !== activeTab;
     });
+    document.documentElement.classList.toggle("urc-color-picking-page", state.active && activeTab === "color" && state.colorPicking);
     ensurePanelInViewport();
   }
 
@@ -423,8 +585,12 @@
     if (!["capture", "compare", "groups", "structure", "color"].includes(tab)) {
       return;
     }
+    if (tab !== "color") {
+      state.colorPicking = false;
+    }
     state.settings.activeTab = tab;
     renderActiveTab();
+    renderColorSamples();
     await saveSettings({ activeTab: tab });
   }
 
@@ -768,9 +934,7 @@
       copyPromptButton.disabled = true;
       copyFullStyleButton.disabled = true;
       copyJsonButton.disabled = true;
-      copyColorPromptButton.disabled = true;
-      copyColorValuesButton.disabled = true;
-      copyColorVarsButton.disabled = true;
+      renderColorSamples();
       setBaselineButton.disabled = true;
       addReferenceGroupButton.disabled = true;
       setStructureReferenceButton.disabled = true;
@@ -824,10 +988,7 @@
     copyPromptButton.disabled = false;
     copyFullStyleButton.disabled = false;
     copyJsonButton.disabled = false;
-    copyColorPromptButton.disabled = false;
-    copyColorValuesButton.disabled = false;
-    copyColorVarsButton.disabled = false;
-    colorOutputEl.textContent = buildColorValues(references);
+    renderColorSamples();
     setBaselineButton.disabled = false;
     addReferenceGroupButton.disabled = false;
     matchCurrentGroupButton.disabled = state.groups.length === 0;
@@ -923,6 +1084,7 @@
 
   function deactivate() {
     state.active = false;
+    state.colorPicking = false;
     hoverBox.hidden = true;
     state.hovered = null;
     state.selected = [];
@@ -931,6 +1093,7 @@
     selectedLayer.innerHTML = "";
     panel.hidden = true;
     document.documentElement.classList.remove("urc-active-page");
+    document.documentElement.classList.remove("urc-color-picking-page");
     renderSelection();
   }
 
@@ -948,6 +1111,11 @@
       if (!state.active || isOwnEvent(event)) {
         return;
       }
+      if (state.settings.activeTab === "color" && state.colorPicking) {
+        hoverBox.hidden = true;
+        state.hovered = null;
+        return;
+      }
       state.hovered = resolveSelectableElement(
         event.target,
         { x: event.clientX, y: event.clientY }
@@ -961,6 +1129,23 @@
     "click",
     (event) => {
       if (!state.active || isOwnEvent(event)) {
+        return;
+      }
+      if (state.settings.activeTab === "color" && state.colorPicking) {
+        const element = event.target instanceof Element ? event.target : null;
+        if (!element) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const sample = chooseColorSample(element, { x: event.clientX, y: event.clientY });
+        if (!sample) {
+          setFeedback("这个位置没有识别到可用颜色。", "error");
+          return;
+        }
+        state.colorSamples.push(sample);
+        renderColorSamples();
+        setFeedback(`已吸取颜色：${sample.hex || sample.value}`);
         return;
       }
       const element = resolveSelectableElement(
@@ -1017,6 +1202,21 @@
 
     if (action === "set-tab") {
       await setActiveTab(event.target.closest("[data-tab]")?.dataset.tab);
+      return;
+    }
+
+    if (action === "toggle-color-picker") {
+      state.colorPicking = !state.colorPicking;
+      renderActiveTab();
+      renderColorSamples();
+      setFeedback(state.colorPicking ? "吸色已开启，点击页面上的颜色点。" : "吸色已停止。", state.colorPicking ? "info" : "success");
+      return;
+    }
+
+    if (action === "clear-color-samples") {
+      state.colorSamples = [];
+      renderColorSamples();
+      setFeedback("已清空吸取颜色。");
       return;
     }
 
@@ -1114,12 +1314,12 @@
     }
 
     if (action === "copy-color-prompt") {
-      if (state.references.length === 0) {
-        setFeedback("请先选择一个元素。", "error");
+      if (state.colorSamples.length === 0) {
+        setFeedback("请先吸取一个颜色。", "error");
         return;
       }
       try {
-        await copyText(buildColorPrompt(state.references));
+        await copyText(buildColorSamplePrompt(state.colorSamples));
         setFeedback("已复制颜色提示词。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
@@ -1128,12 +1328,12 @@
     }
 
     if (action === "copy-color-values") {
-      if (state.references.length === 0) {
-        setFeedback("请先选择一个元素。", "error");
+      if (state.colorSamples.length === 0) {
+        setFeedback("请先吸取一个颜色。", "error");
         return;
       }
       try {
-        await copyText(buildColorValues(state.references));
+        await copyText(buildColorSampleValues(state.colorSamples));
         setFeedback("已复制颜色值。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
@@ -1143,7 +1343,7 @@
 
     if (action === "copy-color-vars") {
       if (state.references.length === 0) {
-        setFeedback("请先选择一个元素。", "error");
+        setFeedback("请先选择一个元素，元素颜色变量需要用普通选择采集。", "error");
         return;
       }
       try {

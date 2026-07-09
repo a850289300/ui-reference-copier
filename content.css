@@ -9,6 +9,11 @@
   cursor: crosshair !important;
 }
 
+.urc-color-picking-page,
+.urc-color-picking-page * {
+  cursor: copy !important;
+}
+
 #ui-reference-copier-root .urc-highlight {
   position: absolute;
   top: 0;
@@ -49,7 +54,7 @@
   top: 20px;
   right: 20px;
   z-index: 2147483647;
-  width: min(360px, calc(100vw - 32px));
+  width: min(430px, calc(100vw - 32px));
   max-height: calc(100vh - 40px);
   overflow: auto;
   box-sizing: border-box;
@@ -374,6 +379,53 @@
   margin-top: 10px;
 }
 
+#ui-reference-copier-root .urc-color-samples {
+  display: grid;
+  gap: 7px;
+  min-height: 42px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#ui-reference-copier-root .urc-color-sample {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: center;
+  color: #111827;
+}
+
+#ui-reference-copier-root .urc-color-swatch {
+  width: 22px;
+  height: 22px;
+  grid-row: span 2;
+  border: 1px solid rgba(17, 24, 39, 0.16);
+  border-radius: 6px;
+}
+
+#ui-reference-copier-root .urc-color-sample span:not(.urc-color-swatch) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+#ui-reference-copier-root .urc-color-sample small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #6b7280;
+  font-size: 11px;
+}
+
 #ui-reference-copier-root .urc-actions {
   display: grid;
   grid-template-columns: 1fr;
@@ -492,6 +544,11 @@
   color: #ffffff;
   background: #2563eb;
   border-color: #2563eb;
+}
+
+#ui-reference-copier-root .urc-primary.is-active {
+  background: #047857;
+  border-color: #047857;
 }
 
 #ui-reference-copier-root .urc-secondary {

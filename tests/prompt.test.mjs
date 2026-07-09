@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   buildAiPrompt,
   buildColorPrompt,
+  buildColorSamplePrompt,
+  buildColorSampleValues,
   buildColorValues,
   buildColorVars,
   buildMultiAiPrompt
@@ -231,3 +233,30 @@ assert.match(colorVars, /--button-text-color: rgb\(255, 255, 255\);/);
 assert.match(colorVars, /--n-rail-color: rgb\(235, 235, 235\);/);
 assert.doesNotMatch(colorVars, /--button-padding/);
 assert.doesNotMatch(colorVars, /--n-padding/);
+
+const colorSamples = [
+  {
+    kind: "背景色",
+    value: "rgb(37, 99, 235)",
+    hex: "#2563eb",
+    selector: "button.primary",
+    page: reference.page
+  },
+  {
+    kind: "图标 fill",
+    value: "rgb(255, 255, 255)",
+    hex: "#ffffff",
+    selector: "svg.icon",
+    page: reference.page
+  }
+];
+const colorSamplePrompt = buildColorSamplePrompt(colorSamples);
+assert.match(colorSamplePrompt, /请只同步下面吸取到的颜色/);
+assert.match(colorSamplePrompt, /1\. rgb\(37, 99, 235\) \/ #2563eb \(背景色 · button\.primary\)/);
+assert.match(colorSamplePrompt, /2\. rgb\(255, 255, 255\) \/ #ffffff \(图标 fill · svg\.icon\)/);
+assert.match(colorSamplePrompt, /不要照搬来源 selector/);
+assert.doesNotMatch(colorSamplePrompt, /子元素 1/);
+
+const colorSampleValues = buildColorSampleValues(colorSamples);
+assert.match(colorSampleValues, /#2563eb/);
+assert.match(colorSampleValues, /图标 fill/);

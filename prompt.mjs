@@ -131,6 +131,16 @@ function normalizeReferences(input) {
   return Array.isArray(input) ? input : [input].filter(Boolean);
 }
 
+function normalizeColorSamples(input) {
+  return Array.isArray(input) ? input : [input].filter(Boolean);
+}
+
+function colorSampleLine(sample, index) {
+  const hex = sample.hex && sample.hex !== sample.value ? ` / ${sample.hex}` : "";
+  const source = [sample.kind, sample.selector].filter(Boolean).join(" · ");
+  return `${index + 1}. ${sample.value}${hex}${source ? ` (${source})` : ""}`;
+}
+
 function formatChildSnapshot(child, index) {
   const rect = child.relativeRect ?? {};
   const styles = child.styles ?? {};
@@ -483,4 +493,37 @@ export function buildColorVars(input) {
     return [header, ...(lines.length > 0 ? lines : ["/* 未采集到明显颜色变量 */"])].join("\n");
   });
   return blocks.join("\n\n");
+}
+
+export function buildColorSamplePrompt(input, target = "Codex / Claude Code") {
+  const samples = normalizeColorSamples(input);
+  if (samples.length === 0) {
+    return "请先吸取至少一个颜色。";
+  }
+  const page = samples[0].page ?? {};
+  return [
+    "请只同步下面吸取到的颜色，不要修改布局、尺寸、字体、DOM 结构和交互逻辑。",
+    "",
+    "这些颜色来自鼠标吸色点附近的真实渲染样式。请映射到当前项目对应元素、已有 class、CSS module、Tailwind class、design token 或样式变量。",
+    "",
+    block("来源页面", [
+      line("URL", page.url),
+      line("Title", page.title)
+    ]),
+    block("吸取颜色", samples.map(colorSampleLine)),
+    "## 修改要求",
+    `- 面向 ${target} 修改当前项目源码。`,
+    "- 只改颜色相关内容，例如文本色、背景色、边框色、图标 fill/stroke、阴影或主题变量。",
+    "- 不要照搬来源 selector；selector 只用于理解颜色来自哪里。",
+    "- 如果只需要一个颜色，请优先使用第 1 个颜色。",
+    ""
+  ].join("\n");
+}
+
+export function buildColorSampleValues(input) {
+  const samples = normalizeColorSamples(input);
+  if (samples.length === 0) {
+    return "请先吸取至少一个颜色。";
+  }
+  return samples.map(colorSampleLine).join("\n");
 }
