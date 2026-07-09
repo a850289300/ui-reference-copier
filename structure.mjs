@@ -59,6 +59,133 @@ function childRole(child) {
   return child.tag || "unknown";
 }
 
+function selectorText(value) {
+  return normalizeText(value).replace(/[.#>[\\\]:()[\]="'_/-]+/g, " ");
+}
+
+function hasMenuToken(value) {
+  return /\b(menu|nav|navigation|sidebar|sider|aside|layout sider|layout-sider)\b/i.test(selectorText(value));
+}
+
+function shortMenuLabel(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text || text.length > 28) {
+    return "";
+  }
+  if (/^[\d\s,￥¥$%.:：/\\-]+$/.test(text)) {
+    return "";
+  }
+  return text;
+}
+
+function menuLevelFromRect(rect) {
+  const x = Number(rect?.x ?? 0);
+  if (!Number.isFinite(x) || x <= 0) {
+    return 0;
+  }
+  return Math.min(3, Math.max(0, Math.round(x / 20)));
+}
+
+function extractMenuItems(children) {
+  const seen = new Set();
+  return children
+    .map((child) => {
+      const label = shortMenuLabel(child.text);
+      if (!label) {
+        return null;
+      }
+      const key = label.toLowerCase();
+      if (seen.has(key)) {
+        return null;
+      }
+      seen.add(key);
+      return {
+        label,
+        level: menuLevelFromRect(child.rect),
+        tag: child.tag,
+        role: child.role,
+        y: Number(child.rect?.y ?? 0)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.y - b.y);
+}
+
+function menuLikeScore(structure) {
+  let score = 0;
+  if (hasMenuToken(structure.selector) || hasMenuToken(structure.domPath)) {
+    score += 3;
+  }
+  if (["nav", "aside", "ul"].includes(structure.tag)) {
+    score += 2;
+  }
+  if ((structure.roleCounts["role:menu"] ?? 0) > 0 || (structure.roleCounts["role:menubar"] ?? 0) > 0) {
+    score += 3;
+  }
+  if ((structure.roleCounts["role:menuitem"] ?? 0) >= 2) {
+    score += 3;
+  }
+  const menuChildren = structure.children.filter((child) => {
+    return hasMenuToken(child.tag) || hasMenuToken(child.role) || hasMenuToken(child.text) || shortMenuLabel(child.text);
+  });
+  if (menuChildren.length >= 3) {
+    score += 2;
+  }
+  return score;
+}
+
+function isMenuLike(structure) {
+  return menuLikeScore(structure) >= 4;
+}
+
+function menuLabelSet(items) {
+  return new Set(items.map((item) => item.label.toLowerCase()));
+}
+
+function missingMenuLabels(referenceItems, currentItems) {
+  const currentLabels = menuLabelSet(currentItems);
+  return referenceItems
+    .filter((item) => !currentLabels.has(item.label.toLowerCase()))
+    .map((item) => item.label);
+}
+
+function extraMenuLabels(referenceItems, currentItems) {
+  const referenceLabels = menuLabelSet(referenceItems);
+  return currentItems
+    .filter((item) => !referenceLabels.has(item.label.toLowerCase()))
+    .map((item) => item.label);
+}
+
+function menuTreeLines(items, limit = 12) {
+  if (items.length === 0) {
+    return ["- 未采集到明确菜单项文本"];
+  }
+  const visible = items.slice(0, limit).map((item) => {
+    const indent = "  ".repeat(Math.min(item.level, 3));
+    return `${indent}- ${item.label}`;
+  });
+  if (items.length > visible.length) {
+    visible.push(`- 还有 ${items.length - visible.length} 个菜单项未展开`);
+  }
+  return visible;
+}
+
+function buildMenuSemantics(referenceStructure, currentStructure) {
+  const referenceItems = extractMenuItems(referenceStructure.children);
+  const currentItems = extractMenuItems(currentStructure.children);
+  if (!isMenuLike(referenceStructure) && !isMenuLike(currentStructure)) {
+    return null;
+  }
+  return {
+    referenceItems,
+    currentItems,
+    missing: missingMenuLabels(referenceItems, currentItems),
+    extra: extraMenuLabels(referenceItems, currentItems),
+    referenceTree: menuTreeLines(referenceItems),
+    currentTree: menuTreeLines(currentItems)
+  };
+}
+
 function isVisibleCard(reference) {
   const styles = reference.element.styles;
   return styles.color.background !== "rgba(0, 0, 0, 0)" ||
@@ -194,6 +321,7 @@ function comparePair(reference, current, index) {
     current: currentStructure,
     tagDelta: tagDelta(referenceStructure.tagCounts, currentStructure.tagCounts),
     roleDelta: tagDelta(referenceStructure.roleCounts, currentStructure.roleCounts),
+    menuSemantics: buildMenuSemantics(referenceStructure, currentStructure),
     warnings: buildWarnings(referenceStructure, currentStructure, score)
   };
 }
@@ -490,7 +618,45 @@ function structureInsightLines(structureDiff) {
   return visible;
 }
 
+function menuSemanticLines(structureDiff) {
+  const pairs = structureDiff.pairs.filter((pair) => pair.menuSemantics);
+  if (pairs.length === 0) {
+    return [];
+  }
+  const lines = [
+    "## 组件语义差异",
+    "- 这是菜单/导航结构差异。不要按 div/ul/li/span 数量直接重写。",
+    "- 请保留当前项目已有菜单组件、路由配置或菜单数据源，只同步菜单项文本、层级、顺序、分组、图标位置、选中态和展开态。",
+    "- 参考 selector 只用于识别范围，不要照搬参考页面 class、id、selector 或 UI 库 DOM。"
+  ];
+  pairs.slice(0, 3).forEach((pair) => {
+    const prefix = structureDiff.pairs.length > 1 ? `元素 ${pair.index} ` : "";
+    const semantics = pair.menuSemantics;
+    lines.push("");
+    lines.push(`${prefix}参考菜单语义:`);
+    lines.push(...semantics.referenceTree);
+    lines.push("");
+    lines.push(`${prefix}当前菜单语义:`);
+    lines.push(...semantics.currentTree);
+    if (semantics.missing.length > 0) {
+      lines.push(`- 当前可能缺少的菜单项: ${semantics.missing.slice(0, 8).join("、")}`);
+    }
+    if (semantics.extra.length > 0) {
+      lines.push(`- 当前可能多出的菜单项: ${semantics.extra.slice(0, 8).join("、")}`);
+    }
+  });
+  return lines;
+}
+
 function recommendationLines(structureDiff) {
+  const hasMenuSemantics = structureDiff.pairs.some((pair) => pair.menuSemantics);
+  if (hasMenuSemantics) {
+    return [
+      "优先检查当前项目的菜单数据源、路由配置或菜单组件 props，而不是照搬参考页面 DOM。",
+      "先对齐菜单项文本、层级、顺序、分组、图标位置、选中态和展开态，再处理具体颜色、字号、间距。",
+      "如果当前 selector 已经是菜单组件根节点，不要因为参考/当前 tag 不同就替换当前组件库。"
+    ];
+  }
   if (structureDiff.severity === "high") {
     return [
       "先确认当前 selector 是否选到了参考元素对应的外层容器。",
@@ -533,6 +699,7 @@ export function buildStructurePrompt(structureDiff, options = {}) {
   const detail = options.detail ?? "compact";
   const insightLines = structureInsightLines(structureDiff);
   const recommendations = recommendationLines(structureDiff);
+  const semantics = menuSemanticLines(structureDiff);
   const lines = [
     `## ${riskTitle(structureDiff.severity)}`,
     "",
@@ -550,6 +717,7 @@ export function buildStructurePrompt(structureDiff, options = {}) {
     "## 关键结构差异",
     ...insightLines.map((line) => `- ${line}`),
     "",
+    ...(semantics.length > 0 ? [...semantics, ""] : []),
     "## 建议",
     ...recommendations.map((line) => `- ${line}`),
     ""

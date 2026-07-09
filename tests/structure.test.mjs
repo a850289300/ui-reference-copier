@@ -143,6 +143,7 @@ assert.match(detailedPrompt, /当前 DOM path: main\.dashboard > span\.generated
 const lowPrompt = buildStructurePrompt(similar);
 assert.match(lowPrompt, /结构状态：基本一致，可继续修样式/);
 assert.doesNotMatch(lowPrompt, /先停一下/);
+assert.doesNotMatch(lowPrompt, /组件语义差异/);
 
 const semanticReference = makeReference("div.metrics", {
   children: [
@@ -193,3 +194,42 @@ assert.match(noisyPrompt, /参考文本摘要: 访问量、销售额、订单量
 assert.match(noisyPrompt, /当前文本摘要: 访问量、销售额、订单量、成交额、日同比/);
 assert.doesNotMatch(noisyPrompt, /93,875/);
 assert.doesNotMatch(noisyPrompt, /68,21682031/);
+
+const referenceMenu = makeReference("div.reference-menu", {
+  tag: "div",
+  text: "dashboard 主控台 工作台 系统设置",
+  children: [
+    child("div", { selector: "div.menu-group", attributes: { role: "menu" }, text: "dashboard", relativeRect: { x: 0, y: 0, width: 180, height: 40 } }),
+    child("div", { selector: "div.menu-item", attributes: { role: "menuitem" }, text: "主控台", relativeRect: { x: 24, y: 40, width: 160, height: 40 } }),
+    child("div", { selector: "div.menu-item", attributes: { role: "menuitem" }, text: "工作台", relativeRect: { x: 24, y: 80, width: 160, height: 40 } }),
+    child("div", { selector: "div.menu-item", attributes: { role: "menuitem" }, text: "系统设置", relativeRect: { x: 0, y: 120, width: 180, height: 40 } })
+  ]
+});
+
+const currentMenu = makeReference("ul.current-sidebar-menu", {
+  url: "http://localhost:3000",
+  tag: "ul",
+  text: "dashboard 主控台 工作台 系统设置 基础列表",
+  children: [
+    child("li", { selector: "li.menu-sub", attributes: { role: "menuitem" }, text: "dashboard", relativeRect: { x: 0, y: 0, width: 180, height: 40 } }),
+    child("li", { selector: "li.menu-item", attributes: { role: "menuitem" }, text: "主控台", relativeRect: { x: 20, y: 40, width: 160, height: 40 } }),
+    child("li", { selector: "li.menu-item", attributes: { role: "menuitem" }, text: "工作台", relativeRect: { x: 20, y: 80, width: 160, height: 40 } }),
+    child("li", { selector: "li.menu-item", attributes: { role: "menuitem" }, text: "系统设置", relativeRect: { x: 0, y: 120, width: 180, height: 40 } }),
+    child("li", { selector: "li.menu-item", attributes: { role: "menuitem" }, text: "基础列表", relativeRect: { x: 0, y: 160, width: 180, height: 40 } })
+  ]
+});
+
+const menuPrompt = buildStructurePrompt(compareStructureSets([referenceMenu], [currentMenu]));
+assert.match(menuPrompt, /组件语义差异/);
+assert.match(menuPrompt, /菜单\/导航/);
+assert.match(menuPrompt, /不要按 div\/ul\/li\/span 数量直接重写/);
+assert.match(menuPrompt, /保留当前项目已有菜单组件、路由配置或菜单数据源/);
+assert.match(menuPrompt, /参考菜单语义/);
+assert.match(menuPrompt, /当前菜单语义/);
+assert.match(menuPrompt, /- dashboard/);
+assert.match(menuPrompt, /  - 主控台/);
+assert.match(menuPrompt, /当前可能多出的菜单项: 基础列表/);
+
+const detailedMenuPrompt = buildDetailedStructurePrompt(compareStructureSets([referenceMenu], [currentMenu]));
+assert.match(detailedMenuPrompt, /组件语义差异/);
+assert.match(detailedMenuPrompt, /逐元素结构数据/);
