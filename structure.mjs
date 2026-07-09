@@ -253,6 +253,21 @@ function formatCounts(counts) {
 }
 
 function textSummary(structure) {
+  const businessKeywords = [
+    "访问量",
+    "销售额",
+    "订单量",
+    "成交额",
+    "转化率",
+    "用户分析",
+    "商品",
+    "日同比",
+    "周同比",
+    "月同比",
+    "总访问量",
+    "总销售额",
+    "总成交额"
+  ];
   const items = [
     structure.text,
     ...structure.children.map((child) => normalizeText(child.text))
@@ -262,8 +277,18 @@ function textSummary(structure) {
   if (items.length === 0) {
     return "(无明显文本)";
   }
+
+  const joined = items.join(" ");
+  const keywordHits = businessKeywords.filter((keyword) => joined.includes(keyword));
+  if (keywordHits.length > 0) {
+    return keywordHits.slice(0, 6).join("、");
+  }
+
   const seen = new Set();
-  const unique = items.filter((item) => {
+  const unique = items
+    .map((item) => item.replace(/[￥¥$]?\d[\d,]*(?:\.\d+)?%?/g, "").replace(/\s+/g, " ").trim())
+    .filter((item) => item && item.length <= 24 && /[\p{L}]/u.test(item))
+    .filter((item) => {
     const key = item.toLowerCase();
     if (seen.has(key)) {
       return false;
@@ -271,12 +296,16 @@ function textSummary(structure) {
     seen.add(key);
     return true;
   });
-  return unique.slice(0, 6).join("、");
+  if (unique.length > 0) {
+    return unique.slice(0, 6).join("、");
+  }
+  return items[0].slice(0, 80);
 }
 
 function objectLines(pair) {
   return [
     `参考元素: ${pair.reference.name}`,
+    `参考定位 selector: ${pair.reference.selector || "(无)"}（仅用于识别参考范围，不要照搬）`,
     `参考位置: ${formatPosition(pair.reference.rect)}`,
     `参考文本摘要: ${textSummary(pair.reference)}`,
     `当前元素: ${pair.current.name}`,

@@ -121,8 +121,9 @@ const prompt = buildStructurePrompt(mismatch);
 assert.match(prompt, /结构状态：明显不一致，先不要修样式/);
 assert.match(prompt, /对比对象/);
 assert.match(prompt, /参考元素:/);
+assert.match(prompt, /参考定位 selector: div\.stats-card（仅用于识别参考范围，不要照搬）/);
 assert.match(prompt, /参考位置: x 100, y 100, 300 x 180/);
-assert.match(prompt, /参考文本摘要: 访问量、总访问量 96,673/);
+assert.match(prompt, /参考文本摘要: 访问量、总访问量/);
 assert.match(prompt, /当前目标 selector: span\.generated-text/);
 assert.match(prompt, /关键结构差异/);
 assert.match(prompt, /建议/);
@@ -167,3 +168,28 @@ assert.match(semanticPrompt, /进度条区域不同/);
 assert.match(semanticPrompt, /普通文本结构不同/);
 assert.match(semanticPrompt, /可能把标题、数值或说明拍平成了普通文本/);
 assert.doesNotMatch(semanticPrompt, /role:none/);
+
+const noisyReference = makeReference("div.n-grid", {
+  text: "访问量日26,046 日同比 93,875% 周同比 62,656% 总访问量： 72,920销售额周￥68,21682031% 总销售额： ￥61,315订单量周59,265 成交额月￥11,035 总成交额： ￥52,465",
+  children: [
+    child("div", { text: "访问量日26,046 日同比 93,875%" }),
+    child("div", { text: "销售额周￥68,21682031%" }),
+    child("div", { text: "订单量周59,265" }),
+    child("div", { text: "成交额月￥11,035" })
+  ]
+});
+const noisyCurrent = makeReference("div.dashboard-metrics", {
+  url: "http://localhost:3000",
+  text: "访问量日96,387 日同比 62,481% 销售额周￥75,293 订单量周87,241 成交额月¥38,660",
+  children: [
+    child("div", { text: "访问量日96,387" }),
+    child("div", { text: "销售额周￥75,293" }),
+    child("div", { text: "订单量周87,241" }),
+    child("div", { text: "成交额月¥38,660" })
+  ]
+});
+const noisyPrompt = buildStructurePrompt(compareStructureSets([noisyReference], [noisyCurrent]));
+assert.match(noisyPrompt, /参考文本摘要: 访问量、销售额、订单量、成交额、日同比、周同比/);
+assert.match(noisyPrompt, /当前文本摘要: 访问量、销售额、订单量、成交额、日同比/);
+assert.doesNotMatch(noisyPrompt, /93,875/);
+assert.doesNotMatch(noisyPrompt, /68,21682031/);
