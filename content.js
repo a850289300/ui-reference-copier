@@ -354,6 +354,10 @@
     return event.composedPath().some((item) => item === root);
   }
 
+  function isOwnElement(element) {
+    return Boolean(element?.closest?.("[data-ui-reference-copier='true']"));
+  }
+
   function isEditableTarget(target) {
     const element = target instanceof Element ? target : null;
     return Boolean(element?.closest("input, textarea, select, [contenteditable='true']"));
@@ -423,6 +427,23 @@
     return null;
   }
 
+  function pointColorElement(point, fallback) {
+    const elements = document.elementsFromPoint?.(point.x, point.y) ?? [];
+    return elements.find((item) => {
+      if (!(item instanceof Element) || isOwnElement(item)) {
+        return false;
+      }
+      const style = window.getComputedStyle(item);
+      const tag = String(item.tagName || "").toLowerCase();
+      const isVector = ["svg", "path", "use", "circle", "rect", "line", "polyline", "polygon"].includes(tag);
+      return isVector ||
+        tag === "canvas" ||
+        usefulColor(readCss(style, "background-image")) ||
+        usefulColor(readCss(style, "background-color")) ||
+        (isVector && (usefulColor(readCss(style, "fill")) || usefulColor(readCss(style, "stroke"))));
+    }) ?? fallback;
+  }
+
   function colorCandidate(kind, value, element) {
     if (!usefulColor(value)) {
       return null;
@@ -437,10 +458,42 @@
     };
   }
 
+  function canvasPixelCandidate(canvas, point) {
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      return null;
+    }
+    try {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((point.x - rect.left) * (canvas.width / rect.width));
+      const y = Math.floor((point.y - rect.top) * (canvas.height / rect.height));
+      const data = canvas.getContext("2d")?.getImageData(x, y, 1, 1)?.data;
+      if (!data || data[3] === 0) {
+        return null;
+      }
+      const value = data[3] === 255
+        ? `rgb(${data[0]}, ${data[1]}, ${data[2]})`
+        : `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${Math.round((data[3] / 255) * 1000) / 1000})`;
+      return {
+        kind: "像素颜色",
+        value,
+        hex: rgbToHex(value),
+        selector: shortSelector(canvas),
+        tag: "canvas",
+        text: shortText(canvas)
+      };
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function chooseColorSample(element, point) {
+    element = pointColorElement(point, element);
     const style = window.getComputedStyle(element);
     const tag = String(element.tagName || "").toLowerCase();
     const candidates = [];
+    if (tag === "canvas") {
+      candidates.push(canvasPixelCandidate(element, point));
+    }
     if (["svg", "path", "use", "circle", "rect", "line", "polyline", "polygon"].includes(tag)) {
       candidates.push(colorCandidate("图标 fill", readCss(style, "fill"), element));
       candidates.push(colorCandidate("图标 stroke", readCss(style, "stroke"), element));
@@ -457,8 +510,6 @@
       });
     }
     candidates.push(colorCandidate("背景色", readCss(style, "background-color"), element));
-    candidates.push(colorCandidate("文本色", readCss(style, "color"), element));
-    candidates.push(colorCandidate("边框色", readCss(style, "border-top-color"), element));
     const background = nearestSolidBackground(element);
     if (background && background.selector !== shortSelector(element)) {
       candidates.push({
@@ -468,6 +519,8 @@
         text: shortText(element)
       });
     }
+    candidates.push(colorCandidate("边框色", readCss(style, "border-top-color"), element));
+    candidates.push(colorCandidate("文本色", readCss(style, "color"), element));
     const sample = candidates.filter(Boolean)[0];
     if (!sample) {
       return null;
