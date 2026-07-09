@@ -52,6 +52,7 @@
     colorTargetPicking: false,
     colorSamples: [],
     colorTarget: null,
+    colorApplyMode: "auto",
     panelDrag: null,
     settings: {
       childDepth: "standard",
@@ -255,6 +256,18 @@
             <p class="urc-label">3 复制给 AI</p>
             <span class="urc-status-pill" data-color-state="empty">待准备</span>
           </div>
+          <label class="urc-field">
+            <span class="urc-label">应用到</span>
+            <select class="urc-select" data-color-apply-mode>
+              <option value="auto">自动判断</option>
+              <option value="background">背景色</option>
+              <option value="text">文字色</option>
+              <option value="border">边框色</option>
+              <option value="icon">图标色</option>
+              <option value="shadow">阴影色</option>
+              <option value="token">主题变量</option>
+            </select>
+          </label>
           <pre class="urc-summary urc-report" data-color-output>先吸取颜色，再设置目标元素。</pre>
         </div>
         <div class="urc-actions">
@@ -313,6 +326,7 @@
   const colorSamplesEl = root.querySelector("[data-color-samples]");
   const colorTargetEl = root.querySelector("[data-color-target]");
   const colorStatePill = root.querySelector("[data-color-state]");
+  const colorApplyModeSelect = root.querySelector("[data-color-apply-mode]");
   const toggleColorPickerButton = root.querySelector("[data-action='toggle-color-picker']");
   const toggleColorTargetPickerButton = root.querySelector("[data-action='toggle-color-target-picker']");
   const clearColorSamplesButton = root.querySelector("[data-action='clear-color-samples']");
@@ -570,6 +584,7 @@
   function renderColorSamples() {
     const hasSamples = state.colorSamples.length > 0;
     const hasTarget = Boolean(state.colorTarget);
+    colorApplyModeSelect.value = state.colorApplyMode || "auto";
     clearColorSamplesButton.disabled = !hasSamples;
     clearColorTargetButton.disabled = !hasTarget;
     copyColorPromptButton.disabled = !hasSamples || !hasTarget;
@@ -761,6 +776,7 @@
     const workflow = result[COLOR_KEY] ?? {};
     state.colorSamples = workflow.samples ?? [];
     state.colorTarget = workflow.target ?? null;
+    state.colorApplyMode = workflow.applyMode ?? "auto";
     renderColorSamples();
   }
 
@@ -768,11 +784,13 @@
     const workflow = {
       samples: state.colorSamples,
       target: state.colorTarget,
+      applyMode: state.colorApplyMode,
       updatedAt: new Date().toISOString(),
       ...nextWorkflow
     };
     state.colorSamples = workflow.samples ?? [];
     state.colorTarget = workflow.target ?? null;
+    state.colorApplyMode = workflow.applyMode ?? "auto";
     await chrome.storage.local.set({ [COLOR_KEY]: workflow });
     renderColorSamples();
   }
@@ -1551,7 +1569,8 @@
       }
       try {
         await copyText(buildColorSamplePrompt(state.colorSamples, "Codex / Claude Code", {
-          targetReference: state.colorTarget
+          targetReference: state.colorTarget,
+          applyMode: state.colorApplyMode
         }));
         setFeedback("已复制带目标元素的颜色修改提示词。");
       } catch (error) {
@@ -1732,6 +1751,16 @@
     });
   }, { signal: lifecycle.signal });
 
+  colorApplyModeSelect.addEventListener("change", () => {
+    void saveColorWorkflow({
+      samples: state.colorSamples,
+      target: state.colorTarget,
+      applyMode: colorApplyModeSelect.value
+    }).then(() => {
+      setFeedback(`颜色应用方式：${colorApplyModeSelect.selectedOptions[0]?.textContent || "自动判断"}`);
+    });
+  }, { signal: lifecycle.signal });
+
   root.addEventListener("pointerdown", (event) => {
     if (event.target?.closest?.("[data-action]")) {
       return;
@@ -1819,6 +1848,7 @@
       const workflow = changes[COLOR_KEY].newValue ?? {};
       state.colorSamples = workflow.samples ?? [];
       state.colorTarget = workflow.target ?? null;
+      state.colorApplyMode = workflow.applyMode ?? "auto";
       renderColorSamples();
     }
     if (changes[SETTINGS_KEY]) {

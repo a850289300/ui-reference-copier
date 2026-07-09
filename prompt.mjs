@@ -162,6 +162,45 @@ function targetColorLines(targetReference) {
   ];
 }
 
+const COLOR_APPLY_MODES = {
+  auto: {
+    label: "自动判断",
+    instruction: "请根据目标元素类型和当前样式判断颜色应应用到 background-color、color、border-color、fill/stroke、box-shadow 或主题变量。按钮、卡片、标签、色块、进度条和容器优先作为背景色；文字、数字、标题和链接优先作为文本色；图标优先作为 fill/stroke。"
+  },
+  background: {
+    label: "背景色",
+    instruction: "请把吸取颜色应用到目标元素背景：优先修改 background-color、background、组件背景变量或主题主色。不要把它当作文本色，除非需要同步调整可读性配色。"
+  },
+  text: {
+    label: "文字色",
+    instruction: "请把吸取颜色应用到目标元素文字：优先修改 color、文本颜色变量或组件 text color token。不要修改背景色。"
+  },
+  border: {
+    label: "边框色",
+    instruction: "请把吸取颜色应用到目标元素边框或描边：优先修改 border-color、outline-color、分割线颜色或组件 border token。"
+  },
+  icon: {
+    label: "图标色",
+    instruction: "请把吸取颜色应用到目标图标：优先修改 SVG fill/stroke、iconfont color、mask/background-color 或图标颜色变量。"
+  },
+  shadow: {
+    label: "阴影色",
+    instruction: "请把吸取颜色应用到阴影或发光效果：优先修改 box-shadow、drop-shadow 或 shadow token 中的颜色部分，不要改变阴影尺寸和偏移。"
+  },
+  token: {
+    label: "主题变量",
+    instruction: "请优先把吸取颜色映射到当前项目已有 design token、CSS 变量、Tailwind theme 或组件库主题变量；只在没有合适变量时才改具体 selector 样式。"
+  }
+};
+
+function colorApplyModeLines(mode = "auto") {
+  const config = COLOR_APPLY_MODES[mode] ?? COLOR_APPLY_MODES.auto;
+  return [
+    line("颜色应用方式", config.label),
+    `应用规则: ${config.instruction}`
+  ];
+}
+
 function formatChildSnapshot(child, index) {
   const rect = child.relativeRect ?? {};
   const styles = child.styles ?? {};
@@ -523,6 +562,7 @@ export function buildColorSamplePrompt(input, target = "Codex / Claude Code", op
   }
   const page = samples[0].page ?? {};
   const targetReference = options.targetReference ?? null;
+  const applyMode = options.applyMode ?? "auto";
   return [
     "请把下面吸取到的颜色应用到当前项目的目标元素上。",
     "",
@@ -534,12 +574,13 @@ export function buildColorSamplePrompt(input, target = "Codex / Claude Code", op
     ]),
     block("吸取颜色", samples.map(colorSampleLine)),
     block("目标元素", targetColorLines(targetReference)),
+    block("颜色应用方式", colorApplyModeLines(applyMode)),
     "## 修改要求",
     `- 面向 ${target} 修改当前项目源码。`,
     targetReference
       ? "- 优先修改上面标注的「当前项目要修改的目标 selector」对应组件或样式。"
       : "- 当前还没有提供目标元素；如果无法定位，请先询问用户目标元素在哪里。",
-    "- 吸取颜色不是默认改文本色；请根据目标元素的实际用途，把颜色应用到最匹配的颜色属性。",
+    "- 吸取颜色不是默认改文本色；必须遵循上面的「颜色应用方式」。",
     "- 可修改的颜色属性包括但不限于：background-color / background / color / border-color / outline-color / box-shadow 颜色 / SVG fill / SVG stroke / iconfont color / mask 背景色 / 主题变量。",
     "- 如果目标是按钮、卡片、标签、色块、进度条或容器，优先考虑背景色或组件主题色；如果目标是文字或图标，再考虑 color、fill 或 stroke。",
     "- 只改颜色相关内容，不要改尺寸、间距、布局、字体、DOM 结构或交互逻辑。",
