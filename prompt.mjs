@@ -171,12 +171,16 @@ export function buildAiPrompt(reference, target = "Codex / Claude Code", options
   const { rect, styles } = element;
   const includeFullComputedStyle = Boolean(options.includeFullComputedStyle);
   const includeJson = Boolean(options.includeJson);
+  const externalReferenceMode = Boolean(options.externalReferenceMode);
   const fullStyleBlock = includeFullComputedStyle ? cssBlock(element.fullComputedStyle) : "";
 
   return [
     "请在当前项目中 1:1 还原下面这个参考元素。",
     "",
     "你是根据浏览器真实渲染信息还原 UI，不要只凭截图猜。优先找到当前项目里对应的组件、布局容器、样式文件或 design token。",
+    externalReferenceMode
+      ? "外部参考页模式：下面的 class/id/selector/HTML 只用于理解参考结构，不要照搬到当前项目；请映射到当前项目已有组件和样式。"
+      : "",
     "",
     block("来源页面", [
       line("URL", page.url),
@@ -227,7 +231,9 @@ export function buildAiPrompt(reference, target = "Codex / Claude Code", options
     "## 实现要求",
     `- 面向 ${target} 修改当前项目源码。`,
     "- 尽量保持尺寸、字体、颜色、间距、圆角、阴影、对齐方式和父级布局关系一致。",
-    "- 不要盲目复制无关 inline style；优先映射到当前项目已有组件、Tailwind class、CSS module、design token 或样式变量。",
+    externalReferenceMode
+      ? "- 当前内容来自外部参考页，不要复制参考页面的 class/id/selector；优先映射到当前项目已有组件、已有 class、Tailwind class、CSS module、design token 或样式变量。"
+      : "- 不要盲目复制无关 inline style；优先映射到当前项目已有组件、Tailwind class、CSS module、design token 或样式变量。",
     "- 如果参考元素内部嵌套很多无关属性、埋点属性或框架生成属性，请清理后再实现。",
     "- 如果无法完全判断，请先列出不确定项和你会如何验证视觉还原度。",
     ""
@@ -245,6 +251,7 @@ export function buildMultiAiPrompt(references, target = "Codex / Claude Code", o
   const page = references[0].page;
   const rect = unionRect(references);
   const includeFullComputedStyle = Boolean(options.includeFullComputedStyle);
+  const externalReferenceMode = Boolean(options.externalReferenceMode);
   const fullStyles = includeFullComputedStyle
     ? references.flatMap((reference, index) => [
         `/* ${index + 1}. ${reference.element.selector} */`,
@@ -258,6 +265,9 @@ export function buildMultiAiPrompt(references, target = "Codex / Claude Code", o
     `请在当前项目中 1:1 还原下面这一组参考元素。本次选中了 ${references.length} 个参考元素。`,
     "",
     "你是根据浏览器真实渲染信息还原 UI，不要只凭截图猜。优先找到共同父级布局容器，再处理子元素样式。",
+    externalReferenceMode
+      ? "外部参考页模式：下面的 class/id/selector/HTML 只用于理解参考结构，不要照搬到当前项目；请映射到当前项目已有组件和样式。"
+      : "",
     "",
     block("来源页面", [
       line("URL", page.url),
@@ -297,7 +307,9 @@ export function buildMultiAiPrompt(references, target = "Codex / Claude Code", o
     `- 面向 ${target} 修改当前项目源码。`,
     "- 优先从共同父级布局、grid/flex、gap、padding、对齐关系入手，而不是分别给每个元素写定位 hack。",
     "- 尽量保持每个元素的尺寸、字体、颜色、间距、圆角、阴影、对齐方式一致。",
-    "- 不要盲目复制无关 inline style；优先映射到当前项目已有组件、Tailwind class、CSS module、design token 或样式变量。",
+    externalReferenceMode
+      ? "- 当前内容来自外部参考页，不要复制参考页面的 class/id/selector；优先映射到当前项目已有组件、已有 class、Tailwind class、CSS module、design token 或样式变量。"
+      : "- 不要盲目复制无关 inline style；优先映射到当前项目已有组件、Tailwind class、CSS module、design token 或样式变量。",
     "- 如果无法完全判断，请先列出不确定项和你会如何验证视觉还原度。",
     ""
   ].join("\n");

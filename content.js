@@ -43,6 +43,7 @@
     settings: {
       childDepth: "standard",
       includeIconDetails: false,
+      externalReferenceMode: false,
       activeTab: "capture"
     }
   };
@@ -102,6 +103,10 @@
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
+        </label>
+        <label class="urc-toggle-field">
+          <input type="checkbox" data-setting="external-reference-mode">
+          <span>外部参考页模式</span>
         </label>
       </section>
       <div class="urc-actions">
@@ -207,6 +212,7 @@
   const groupDiffOutputEl = root.querySelector("[data-group-diff-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
+  const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
   const selectParentButtons = Array.from(root.querySelectorAll("[data-action='select-parent']"));
   const tabButtons = Array.from(root.querySelectorAll("[data-tab]"));
   const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
@@ -309,6 +315,7 @@
     includeIconDetailsInputs.forEach((input) => {
       input.checked = Boolean(state.settings.includeIconDetails);
     });
+    externalReferenceModeInput.checked = Boolean(state.settings.externalReferenceMode);
     renderActiveTab();
   }
 
@@ -866,11 +873,16 @@
 
     try {
       if (action === "copy-prompt") {
-        await copyText(buildMultiAiPrompt(state.references));
+        await copyText(buildMultiAiPrompt(state.references, "Codex / Claude Code", {
+          externalReferenceMode: Boolean(state.settings.externalReferenceMode)
+        }));
         setFeedback("已复制给 AI 的提示词到剪贴板。");
       }
       if (action === "copy-full-style") {
-        await copyText(buildMultiAiPrompt(state.references, "Codex / Claude Code", { includeFullComputedStyle: true }));
+        await copyText(buildMultiAiPrompt(state.references, "Codex / Claude Code", {
+          includeFullComputedStyle: true,
+          externalReferenceMode: Boolean(state.settings.externalReferenceMode)
+        }));
         setFeedback("已复制完整样式提示词到剪贴板。");
       }
       if (action === "copy-json") {
@@ -938,6 +950,14 @@
       });
     }, { signal: lifecycle.signal });
   });
+
+  externalReferenceModeInput.addEventListener("change", () => {
+    void saveSettings({ externalReferenceMode: externalReferenceModeInput.checked }).then(() => {
+      setFeedback(externalReferenceModeInput.checked
+        ? "已开启外部参考页模式，复制提示词会提醒不要照搬参考类名。"
+        : "已关闭外部参考页模式。");
+    });
+  }, { signal: lifecycle.signal });
 
   root.addEventListener("pointerdown", (event) => {
     if (event.target?.closest?.("[data-action]")) {
@@ -1021,6 +1041,7 @@
       includeIconDetailsInputs.forEach((input) => {
         input.checked = Boolean(state.settings.includeIconDetails);
       });
+      externalReferenceModeInput.checked = Boolean(state.settings.externalReferenceMode);
       renderActiveTab();
     }
   };

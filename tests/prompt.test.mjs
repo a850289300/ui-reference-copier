@@ -133,8 +133,14 @@ assert.match(prompt, /Layout\/Motion: position relative; overflow hidden; transf
 assert.match(prompt, /Media: object-fit cover; aspect-ratio 16 \/ 9/);
 assert.match(prompt, /Component vars: --n-fill-color rgb\(32, 128, 240\); --n-rail-color rgb\(235, 235, 235\)/);
 assert.match(prompt, /不要盲目复制无关 inline style/);
+assert.doesNotMatch(prompt, /外部参考页模式/);
 assert.doesNotMatch(prompt, /结构化 JSON/);
 assert.doesNotMatch(prompt, /"capturedAt"/);
+
+const externalPrompt = buildAiPrompt(reference, "Codex", { externalReferenceMode: true });
+assert.match(externalPrompt, /外部参考页模式/);
+assert.match(externalPrompt, /不要照搬到当前项目/);
+assert.match(externalPrompt, /button\.primary/);
 
 const fullPrompt = buildAiPrompt(reference, "Codex", { includeFullComputedStyle: true });
 assert.match(fullPrompt, /完整 computed CSS/);

@@ -39,12 +39,12 @@ function formatRect(rect) {
   return `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`;
 }
 
-function snapshotReference(reference) {
+function snapshotReference(reference, options = {}) {
   const element = reference.element;
   const styles = element.styles;
   const parent = element.parent;
   return [
-    `${element.selector}`,
+    options.includeSelector ? `当前项目要修改: ${element.selector}` : null,
     `rect ${formatRect(element.rect)}`,
     `display ${styles.box.display}`,
     `padding ${styles.box.padding}`,
@@ -52,23 +52,31 @@ function snapshotReference(reference) {
     `背景 ${styles.color.background}`,
     `圆角 ${styles.box.borderRadius}`,
     `阴影 ${styles.box.boxShadow}`,
-    `父级: ${parent?.selector ?? "(none)"}; display ${parent?.display ?? "(unknown)"}; gap ${parent?.gap ?? "(unknown)"}; padding ${parent?.padding ?? "(unknown)"}`
-  ].join("; ");
+    options.includeSelector
+      ? `父级: ${parent?.selector ?? "(none)"}; display ${parent?.display ?? "(unknown)"}; gap ${parent?.gap ?? "(unknown)"}; padding ${parent?.padding ?? "(unknown)"}`
+      : `父级布局: display ${parent?.display ?? "(unknown)"}; gap ${parent?.gap ?? "(unknown)"}; padding ${parent?.padding ?? "(unknown)"}`
+  ].filter(Boolean).join("; ");
 }
 
-function iconSnapshot(reference) {
+function iconSnapshot(reference, options = {}) {
   const icons = reference.element.iconDetails ?? [];
   if (icons.length === 0) {
     return "";
   }
   return `图标: ${icons.map((icon) => {
     if (icon.type === "svg") {
-      return `svg ${icon.selector} viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount}`;
+      return options.includeSelector
+        ? `svg ${icon.selector} viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount}`
+        : `svg viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount}`;
     }
     if (icon.type === "img") {
-      return `img ${icon.selector} src ${icon.src || "(none)"}`;
+      return options.includeSelector
+        ? `img ${icon.selector} src ${icon.src || "(none)"}`
+        : `img src ${icon.src || "(none)"}`;
     }
-    return `css/iconfont ${icon.selector} class ${icon.className || "(none)"}`;
+    return options.includeSelector
+      ? `css/iconfont ${icon.selector} class ${icon.className || "(none)"}`
+      : `css/iconfont font ${icon.fontFamily || "(none)"}`;
   }).join("; ")}`;
 }
 
@@ -113,7 +121,7 @@ function groupSnapshotLines(group) {
   if (group.currentReferences?.length > 0) {
     lines.push(...group.currentReferences.map((reference, index) => {
       const suffix = group.currentReferences.length === 1 ? "" : ` ${index + 1}`;
-      return `- ${currentLabel}${suffix}: ${[snapshotReference(reference), iconSnapshot(reference)].filter(Boolean).join("; ")}`;
+      return `- ${currentLabel}${suffix}: ${[snapshotReference(reference, { includeSelector: true }), iconSnapshot(reference, { includeSelector: true })].filter(Boolean).join("; ")}`;
     }));
   } else {
     lines.push("- 当前范围: 还没有匹配当前实现元素");
@@ -275,7 +283,7 @@ export function buildGroupedDiffPrompt(groupedDiff, options = {}) {
     "- 先确认每组选择范围是否一致。如果参考是白色卡片，当前也必须匹配外层卡片，不要只匹配内部图标或文字。",
     "- 多组共同布局要整体还原，例如卡片外框、背景色、横向/网格排列、每组宽高和组间 gap。",
     "- 按组逐一修复，优先处理每组摘要里的尺寸、间距、字体、颜色和子元素差异。",
-    "- 多个组共享的问题优先抽到共同父级布局、组件样式、design token 或复用 class 中。",
+    "- 参考范围的 class/id/selector 不作为实现目标；请优先修改每组“当前项目要修改”的 selector，或映射到当前项目已有组件、样式、design token 或复用 class 中。",
     "- 不要为了单个组使用大量 absolute positioning 或 transform 硬凑。",
     "- 修复后建议再次使用插件逐组对比，确认差异是否收敛。",
     ""

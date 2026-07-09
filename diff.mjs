@@ -239,7 +239,6 @@ function diffChildRects(baselineChild, currentChild) {
 
 const ICON_FIELDS = [
   "type",
-  "selector",
   "viewBox",
   "pathCount",
   "useHref",
@@ -249,7 +248,6 @@ const ICON_FIELDS = [
   "src",
   "alt",
   "objectFit",
-  "className",
   "fontFamily",
   "backgroundImage",
   "maskImage"
@@ -260,12 +258,12 @@ function iconLabel(icon) {
     return "(missing)";
   }
   if (icon.type === "svg") {
-    return `svg ${icon.selector || "(unknown)"} viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount ?? "(unknown)"}`;
+    return `svg viewBox ${icon.viewBox || "(none)"} path ${icon.pathCount ?? "(unknown)"}`;
   }
   if (icon.type === "img") {
-    return `img ${icon.selector || "(unknown)"} src ${icon.src || "(none)"}`;
+    return `img src ${icon.src || "(none)"}`;
   }
-  return `css/iconfont ${icon.selector || "(unknown)"} class ${icon.className || "(none)"}`;
+  return `css/iconfont font ${icon.fontFamily || "(none)"}`;
 }
 
 function diffIconFields(baselineIcon, currentIcon) {
@@ -390,7 +388,7 @@ function childSummaryItems(children = [], pairIndex) {
     if (child.missing) {
       return [{
         score: 120,
-        text: `${context}${child.baselineSelector} 在当前实现中缺失`
+        text: `${context}参考子元素在当前实现中缺失`
       }];
     }
     return [
@@ -552,8 +550,7 @@ function formatPair(pair) {
 
   return [
     `### 元素 ${pair.index}`,
-    `参考 selector: ${pair.baselineSelector}`,
-    `当前 selector: ${pair.currentSelector}`,
+    `当前项目要修改的元素: ${pair.currentSelector}`,
     `文本: 参考 ${pair.baselineText || "(空)"} / 当前 ${pair.currentText || "(空)"}`,
     "位置尺寸:",
     `- x: ${formatDelta(pair.rect.x)}`,
@@ -577,7 +574,7 @@ function formatChildDiffs(children = []) {
     ...children.flatMap((child) => {
       if (child.missing) {
         return [
-          `- 子元素 ${child.index}: ${child.baselineSelector} 缺失`,
+          `- 子元素 ${child.index}: 参考子元素缺失`,
           `  文本: ${child.baselineText || "(空)"}`
         ];
       }
@@ -586,7 +583,8 @@ function formatChildDiffs(children = []) {
         return `  - ${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`;
       });
       return [
-        `- 子元素 ${child.index}: ${child.baselineSelector} -> ${child.currentSelector}`,
+        `- 子元素 ${child.index}`,
+        `  当前项目子元素: ${child.currentSelector}`,
         `  文本: 参考 ${child.baselineText || "(空)"} / 当前 ${child.currentText || "(空)"}`,
         `  位置: x ${formatDelta(child.rect.x)}; y ${formatDelta(child.rect.y)}; width ${formatDelta(child.rect.width)}; height ${formatDelta(child.rect.height)}`,
         ...styleLines
@@ -653,6 +651,7 @@ export function buildDiffPrompt(diff) {
     "",
     "## 修复要求",
     "- 优先从共同父级容器、flex/grid、gap、padding、字体 token、颜色 token、圆角和阴影变量入手。",
+    "- 参考页面的 class/id/selector 不作为实现目标；请修改上面标注的当前项目 selector，或映射到当前项目已有组件、已有 class、CSS module、Tailwind 或 design token。",
     "- 不要用 absolute positioning 或大量 transform 去硬凑，除非原组件本身就是定位布局。",
     "- 如果参考和当前的选择顺序可能不一致，请先说明你如何重新匹配元素。",
     "- 输出时先说明要改哪些源码位置，再给出 patch。",
