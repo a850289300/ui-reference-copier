@@ -1,3 +1,5 @@
+import { describeReference } from "./label.mjs";
+
 function round(value) {
   return Math.round(Number(value) * 100) / 100;
 }
@@ -11,6 +13,13 @@ function formatRect(rect) {
     return "(无)";
   }
   return `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`;
+}
+
+function formatPosition(rect) {
+  if (!rect) {
+    return "(未知位置)";
+  }
+  return `x ${rect.x}, y ${rect.y}, ${rect.width} x ${rect.height}`;
 }
 
 function countBy(items, reader) {
@@ -62,13 +71,23 @@ function collectStructure(reference, options = {}) {
   const children = reference.element.children ?? [];
   const limit = options.limit ?? 24;
   const sampledChildren = children.slice(0, limit);
+  const label = describeReference(reference);
   return {
+    name: label.name,
+    detail: label.detail,
     selector: reference.element.selector,
+    domPath: reference.element.domPath,
     tag: reference.element.tag,
     text: normalizeText(reference.element.text).slice(0, 80),
     rect: reference.element.rect,
     display: reference.element.styles.box.display,
     parentDisplay: reference.element.parent?.display ?? "",
+    parent: {
+      selector: reference.element.parent?.selector ?? "",
+      display: reference.element.parent?.display ?? "",
+      gap: reference.element.parent?.gap ?? "",
+      padding: reference.element.parent?.padding ?? ""
+    },
     childCount: children.length,
     sampledCount: sampledChildren.length,
     tagCounts: countBy(sampledChildren, (child) => child.tag),
@@ -231,6 +250,52 @@ function formatCounts(counts) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key} ${value}`)
     .join("; ");
+}
+
+function textSummary(structure) {
+  const items = [
+    structure.text,
+    ...structure.children.map((child) => normalizeText(child.text))
+  ]
+    .map((item) => String(item ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  if (items.length === 0) {
+    return "(无明显文本)";
+  }
+  const seen = new Set();
+  const unique = items.filter((item) => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, 6).join("、");
+}
+
+function objectLines(pair) {
+  return [
+    `参考元素: ${pair.reference.name}`,
+    `参考位置: ${formatPosition(pair.reference.rect)}`,
+    `参考文本摘要: ${textSummary(pair.reference)}`,
+    `当前元素: ${pair.current.name}`,
+    `当前目标 selector: ${pair.currentSelector}`,
+    `当前位置: ${formatPosition(pair.current.rect)}`,
+    `当前文本摘要: ${textSummary(pair.current)}`
+  ];
+}
+
+function detailedLocationLines(pair) {
+  return [
+    `### 元素 ${pair.index}`,
+    `参考 selector: ${pair.reference.selector || "(无)"}`,
+    `参考 DOM path: ${pair.reference.domPath || "(无)"}`,
+    `参考父级: ${pair.reference.parent.selector || "(无)"}; display ${pair.reference.parent.display || "(unknown)"}; gap ${pair.reference.parent.gap || "(unknown)"}; padding ${pair.reference.parent.padding || "(unknown)"}`,
+    `当前 selector: ${pair.currentSelector || "(无)"}`,
+    `当前 DOM path: ${pair.current.domPath || "(无)"}`,
+    `当前父级: ${pair.current.parent.selector || "(无)"}; display ${pair.current.parent.display || "(unknown)"}; gap ${pair.current.parent.gap || "(unknown)"}; padding ${pair.current.parent.padding || "(unknown)"}`
+  ].join("\n");
 }
 
 function formatDeltas(items, label) {
@@ -442,9 +507,11 @@ export function buildStructurePrompt(structureDiff, options = {}) {
   const lines = [
     `## ${riskTitle(structureDiff.severity)}`,
     "",
-    `当前项目要修改的元素: ${structureDiff.pairs[0]?.currentSelector ?? "(未知)"}`,
     `结构相似度: ${structureDiff.score}/100`,
     `风险等级: ${riskLabel(structureDiff.severity)}`,
+    "",
+    "## 对比对象",
+    ...(structureDiff.pairs[0] ? objectLines(structureDiff.pairs[0]) : ["参考元素: (未知)", "当前元素: (未知)"]),
     "",
     "## 页面",
     `参考页: ${structureDiff.pages.reference?.url ?? "(未知)"}`,
@@ -469,6 +536,9 @@ export function buildStructurePrompt(structureDiff, options = {}) {
     "",
     "## 逐元素结构数据",
     ...structureDiff.pairs.map(formatPair),
+    "",
+    "## 详细定位信息",
+    ...structureDiff.pairs.map(detailedLocationLines),
     "",
     "## 详细版说明",
     "- 详细版用于排查复杂结构，不建议默认全部交给模型硬改。",
