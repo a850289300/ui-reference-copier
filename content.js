@@ -427,23 +427,6 @@
     return null;
   }
 
-  function pointColorElement(point, fallback) {
-    const elements = document.elementsFromPoint?.(point.x, point.y) ?? [];
-    return elements.find((item) => {
-      if (!(item instanceof Element) || isOwnElement(item)) {
-        return false;
-      }
-      const style = window.getComputedStyle(item);
-      const tag = String(item.tagName || "").toLowerCase();
-      const isVector = ["svg", "path", "use", "circle", "rect", "line", "polyline", "polygon"].includes(tag);
-      return isVector ||
-        tag === "canvas" ||
-        usefulColor(readCss(style, "background-image")) ||
-        usefulColor(readCss(style, "background-color")) ||
-        (isVector && (usefulColor(readCss(style, "fill")) || usefulColor(readCss(style, "stroke"))));
-    }) ?? fallback;
-  }
-
   function colorCandidate(kind, value, element) {
     if (!usefulColor(value)) {
       return null;
@@ -486,8 +469,29 @@
     }
   }
 
-  function chooseColorSample(element, point) {
-    element = pointColorElement(point, element);
+  function pointTextColorCandidate(point) {
+    const range = document.caretRangeFromPoint?.(point.x, point.y) ?? null;
+    const node = range?.startContainer;
+    if (!node || node.nodeType !== Node.TEXT_NODE || !String(node.textContent || "").trim()) {
+      return null;
+    }
+    const parent = node.parentElement;
+    if (!parent || isOwnElement(parent)) {
+      return null;
+    }
+    const probeRange = document.createRange();
+    probeRange.selectNodeContents(node);
+    const hit = Array.from(probeRange.getClientRects()).some((rect) => (
+      point.x >= rect.left &&
+      point.x <= rect.right &&
+      point.y >= rect.top &&
+      point.y <= rect.bottom
+    ));
+    probeRange.detach();
+    return hit ? colorCandidate("文本色", readCss(window.getComputedStyle(parent), "color"), parent) : null;
+  }
+
+  function elementPointColorCandidate(element, point) {
     const style = window.getComputedStyle(element);
     const tag = String(element.tagName || "").toLowerCase();
     const candidates = [];
@@ -510,18 +514,42 @@
       });
     }
     candidates.push(colorCandidate("背景色", readCss(style, "background-color"), element));
-    const background = nearestSolidBackground(element);
-    if (background && background.selector !== shortSelector(element)) {
-      candidates.push({
+    candidates.push(colorCandidate("边框色", readCss(style, "border-top-color"), element));
+    return candidates.filter(Boolean)[0] ?? null;
+  }
+
+  function pointRenderedColor(point, fallback) {
+    const textSample = pointTextColorCandidate(point);
+    if (textSample) {
+      return textSample;
+    }
+
+    const elements = document.elementsFromPoint?.(point.x, point.y) ?? [fallback];
+    for (const item of elements) {
+      if (!(item instanceof Element) || isOwnElement(item)) {
+        continue;
+      }
+      const sample = elementPointColorCandidate(item, point);
+      if (sample) {
+        return sample;
+      }
+    }
+
+    const background = nearestSolidBackground(fallback);
+    if (background) {
+      return {
         ...background,
         hex: rgbToHex(background.value),
-        tag,
-        text: shortText(element)
-      });
+        tag: String(fallback?.tagName || "").toLowerCase(),
+        text: shortText(fallback)
+      };
     }
-    candidates.push(colorCandidate("边框色", readCss(style, "border-top-color"), element));
-    candidates.push(colorCandidate("文本色", readCss(style, "color"), element));
-    const sample = candidates.filter(Boolean)[0];
+
+    return colorCandidate("文本色", readCss(window.getComputedStyle(fallback), "color"), fallback);
+  }
+
+  function chooseColorSample(element, point) {
+    const sample = pointRenderedColor(point, element);
     if (!sample) {
       return null;
     }
