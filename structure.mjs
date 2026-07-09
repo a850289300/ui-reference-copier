@@ -203,16 +203,21 @@ export function compareStructureSets(referenceReferences, currentReferences) {
 }
 
 export function structureRiskLines(structureDiff) {
-  if (!structureDiff || structureDiff.severity === "low") {
+  if (!structureDiff) {
     return [];
   }
   const isHigh = structureDiff.severity === "high";
+  const isMedium = structureDiff.severity === "medium";
   return [
-    `${isHigh ? "严重提醒" : "注意"}：结构${isHigh ? "明显不一致" : "可能不一致"}，最低结构相似度 ${structureDiff.score}/100。`,
+    `${isHigh ? "严重提醒" : isMedium ? "注意" : "普通提示"}：结构${isHigh ? "明显不一致" : isMedium ? "可能不一致" : "基本一致"}，最低结构相似度 ${structureDiff.score}/100。`,
     isHigh
       ? "先不要修颜色、字体、间距。很可能选错了元素层级，或当前页面缺少关键容器/布局区域。"
-      : "建议先确认元素层级是否一致，再处理颜色、字体、间距等样式差异。",
-    "请优先使用「结构对比」修正 DOM / 组件 / 布局层级；结构对齐后再做样式对比。",
+      : isMedium
+        ? "建议先确认元素层级是否一致，再处理颜色、字体、间距等样式差异。"
+        : "可以继续处理样式差异；如果视觉仍然偏差较大，再回到结构对比确认层级。",
+    isHigh || isMedium
+      ? "请优先使用「结构对比」修正 DOM / 组件 / 布局层级；结构对齐后再做样式对比。"
+      : "结构状态正常，本次主要关注尺寸、间距、颜色、字体等样式差异。",
     ...structureDiff.pairs.flatMap((pair) => pair.warnings.map((warning) => `元素 ${pair.index}: ${warning}`)).slice(0, 6)
   ];
 }

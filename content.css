@@ -472,6 +472,18 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+#ui-reference-copier-root .urc-toast[data-kind="info"] {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+#ui-reference-copier-root .urc-toast[data-kind="warning"] {
+  color: #9a3412;
+  background: #fff7ed;
+  border-color: rgba(249, 115, 22, 0.32);
+}
+
 #ui-reference-copier-root .urc-toast[hidden] {
   display: none;
 }

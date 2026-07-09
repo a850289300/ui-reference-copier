@@ -92,7 +92,8 @@ const similarCard = makeReference("div.current-card", {
 
 const similar = compareStructureSets([referenceCard], [similarCard]);
 assert.equal(similar.severity, "low");
-assert.equal(structureRiskLines(similar).length, 0);
+assert.ok(structureRiskLines(similar).some((line) => line.includes("普通提示")));
+assert.ok(structureRiskLines(similar).some((line) => line.includes("结构基本一致")));
 
 const wrongInnerText = makeReference("span.generated-text", {
   url: "http://localhost:3000",

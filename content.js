@@ -692,6 +692,29 @@
     }, kind === "error" ? 3200 : 1800);
   }
 
+  function structureFeedbackKind(severity) {
+    if (severity === "high") {
+      return "error";
+    }
+    if (severity === "medium") {
+      return "warning";
+    }
+    return "info";
+  }
+
+  function structureFeedbackMessage(structureDiff, prefix = "结构对比") {
+    if (!structureDiff) {
+      return `${prefix}完成。`;
+    }
+    if (structureDiff.severity === "high") {
+      return `${prefix}：结构明显不一致，相似度 ${structureDiff.score}/100。先确认是否选错层级。`;
+    }
+    if (structureDiff.severity === "medium") {
+      return `${prefix}：结构可能不一致，相似度 ${structureDiff.score}/100。建议确认层级。`;
+    }
+    return `${prefix}：结构基本一致，相似度 ${structureDiff.score}/100。可以继续修样式。`;
+  }
+
   function renderSelection() {
     selectedLayer.innerHTML = "";
     state.selected.forEach((element, index) => {
@@ -1043,10 +1066,10 @@
           setFeedback("请先保存结构参考和当前结构。", "error");
           return;
         }
-        setFeedback(structureDiff.severity === "high"
-          ? `结构明显不一致，相似度 ${structureDiff.score}/100。先确认是否选错层级。`
-          : `已生成结构对比，相似度 ${structureDiff.score}/100。`,
-        structureDiff.severity === "high" ? "error" : "success");
+        setFeedback(
+          structureFeedbackMessage(structureDiff, "结构对比"),
+          structureFeedbackKind(structureDiff.severity)
+        );
       } catch (error) {
         setFeedback(`对比失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }
@@ -1112,10 +1135,10 @@
         state.lastDiff = compareReferenceSets(state.baseline.references, state.references);
         copyDiffButton.disabled = false;
         diffOutputEl.textContent = buildDiffPrompt(state.lastDiff);
-        setFeedback(state.lastDiff.structure?.severity === "high"
-          ? "结构明显不一致：先用结构对比确认层级，再修样式。"
-          : "已生成差异报告，可复制给 AI。",
-        state.lastDiff.structure?.severity === "high" ? "error" : "success");
+        setFeedback(
+          structureFeedbackMessage(state.lastDiff.structure, "已生成差异报告"),
+          structureFeedbackKind(state.lastDiff.structure?.severity)
+        );
       }
       if (action === "compare-groups") {
         state.lastGroupedDiff = compareReferenceGroups(state.groups);
@@ -1124,11 +1147,19 @@
         });
         groupDiffOutputEl.textContent = buildGroupedDiffPrompt(state.lastGroupedDiff);
         renderGroupsStatus();
-        const hasHighStructureRisk = state.lastGroupedDiff.groups.some((group) => group.diff?.structure?.severity === "high");
-        setFeedback(hasHighStructureRisk
-          ? "有分组结构明显不一致：先确认选中层级或补布局。"
-          : "已生成多组差异报告，可复制给 AI。",
-        hasHighStructureRisk ? "error" : "success");
+        const severities = state.lastGroupedDiff.groups
+          .map((group) => group.diff?.structure?.severity)
+          .filter(Boolean);
+        const worstSeverity = severities.includes("high") ? "high" : severities.includes("medium") ? "medium" : "low";
+        const comparedCount = severities.length;
+        setFeedback(
+          worstSeverity === "high"
+            ? `多组对比完成：${comparedCount} 组里有结构明显不一致，先确认层级或补布局。`
+            : worstSeverity === "medium"
+              ? `多组对比完成：${comparedCount} 组里有结构可能不一致，建议确认层级。`
+              : `多组对比完成：${comparedCount} 组结构基本一致，可以继续修样式。`,
+          structureFeedbackKind(worstSeverity)
+        );
       }
     } catch (error) {
       setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
