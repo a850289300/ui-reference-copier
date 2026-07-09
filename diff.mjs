@@ -78,6 +78,33 @@ const CHILD_STYLE_FIELDS = [
   "aspectRatio"
 ];
 
+const VISUAL_BASELINE_FIELDS = [
+  ["位置", (item) => {
+    const rect = item.element.rect;
+    return `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`;
+  }],
+  ["字体", (item) => {
+    const font = item.element.styles.font;
+    return `${font.family}; ${font.size}; weight ${font.weight}; line-height ${font.lineHeight}; letter-spacing ${font.letterSpacing}`;
+  }],
+  ["文字色", (item) => item.element.styles.color.text],
+  ["背景色", (item) => item.element.styles.color.background],
+  ["背景图", (item) => item.element.styles.color.backgroundImage],
+  ["display", (item) => item.element.styles.box.display],
+  ["padding", (item) => item.element.styles.box.padding],
+  ["margin", (item) => item.element.styles.box.margin],
+  ["border", (item) => item.element.styles.box.border],
+  ["圆角", (item) => item.element.styles.box.borderRadius],
+  ["box-shadow", (item) => item.element.styles.box.boxShadow],
+  ["position", (item) => item.element.styles.layout.position],
+  ["gap", (item) => item.element.styles.layout.gap],
+  ["align / justify", (item) => `${item.element.styles.layout.alignItems} / ${item.element.styles.layout.justifyContent}`],
+  ["父级布局", (item) => {
+    const parent = item.element.parent;
+    return `${parent?.selector ?? "(none)"}; display ${parent?.display ?? "(unknown)"}; gap ${parent?.gap ?? "(unknown)"}; padding ${parent?.padding ?? "(unknown)"}`;
+  }]
+];
+
 function round(value) {
   return Math.round(Number(value) * 100) / 100;
 }
@@ -123,6 +150,13 @@ function diffRect(baseline, current) {
 function readField(item, reader) {
   const value = reader(item);
   return value === undefined || value === null ? "" : String(value);
+}
+
+function visualBaselineSnapshot(item) {
+  return VISUAL_BASELINE_FIELDS.map(([label, reader]) => ({
+    label,
+    value: readField(item, reader)
+  }));
 }
 
 function diffStyles(baseline, current) {
@@ -521,6 +555,10 @@ export function compareReferenceSets(baselineReferences, currentReferences) {
         currentSelector: current.element.selector,
         baselineText: baseline.element.text,
         currentText: current.element.text,
+        visualBaseline: {
+          baseline: visualBaselineSnapshot(baseline),
+          current: visualBaselineSnapshot(current)
+        },
         rect: diffRect(baseline.element.rect, current.element.rect),
         styles: diffStyles(baseline, current),
         children: diffChildren(baseline, current),
@@ -566,6 +604,23 @@ function formatPair(pair) {
     formatChildDiffs(pair.children),
     formatIconDiffs(pair.icons)
   ].filter(Boolean).join("\n");
+}
+
+function formatVisualBaselinePair(pair) {
+  const currentByLabel = new Map((pair.visualBaseline?.current ?? []).map((item) => [item.label, item.value]));
+  const rows = (pair.visualBaseline?.baseline ?? []).map((item) => {
+    const baselineValue = item.value || "(空)";
+    const currentValue = currentByLabel.get(item.label) || "(空)";
+    return `| ${item.label} | ${baselineValue} | ${currentValue} |`;
+  });
+
+  return [
+    `### 元素 ${pair.index}`,
+    `当前项目要修改的元素: ${pair.currentSelector}`,
+    "| 字段 | 参考 | 当前 |",
+    "|---|---|---|",
+    ...rows
+  ].join("\n");
 }
 
 function formatChildDiffs(children = []) {
@@ -654,6 +709,10 @@ export function buildDiffPrompt(diff) {
     "",
     "## 关键差异摘要",
     ...(summary.length > 0 ? summary : ["未发现明显关键差异。"]),
+    "",
+    "## 关键视觉基准",
+    "下面这些字段即使差异很小也会保留，用来给 AI 明确最终视觉目标，尤其是背景、字体、圆角和 box-shadow。",
+    ...diff.pairs.map(formatVisualBaselinePair),
     "",
     "## 整体边界差异",
     formatBounds(diff.bounds),

@@ -67,6 +67,7 @@ function makeReference(selector, rect, overrides = {}) {
 
 const baseline = [
   makeReference("button.primary", { x: 100, y: 200, width: 128, height: 44 }, {
+    shadow: "rgba(0, 21, 41, 0.08) 0px 1px 4px 0px",
     children: [
       {
         signature: "span.label|Start now",
@@ -191,6 +192,10 @@ assert.match(summary.join("\n"), /子元素 1: width: 参考 auto \/ 当前 48px
 assert.match(prompt, /参考页/);
 assert.match(prompt, /当前实现页/);
 assert.match(prompt, /关键差异摘要/);
+assert.match(prompt, /关键视觉基准/);
+assert.match(prompt, /\| box-shadow \| rgba\(0, 21, 41, 0\.08\) 0px 1px 4px 0px \| none \|/);
+assert.match(prompt, /\| 字体 \| Inter; 16px; weight 600; line-height 24px; letter-spacing 0px \| Inter; 14px; weight 600; line-height 24px; letter-spacing 0px \|/);
+assert.match(prompt, /\| 背景色 \| rgb\(37, 99, 235\) \| rgb\(59, 130, 246\) \|/);
 assert.match(prompt, /font\.size: 参考 16px \/ 当前 14px/);
 assert.match(prompt, /子元素差异/);
 assert.match(prompt, /当前项目要修改的元素: button\.primary/);
