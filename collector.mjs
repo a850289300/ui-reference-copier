@@ -475,7 +475,19 @@ function collectChildSnapshots(element, parentRect, limit = DEFAULT_CHILD_SNAPSH
 
 function collectIconDetails(element) {
   const icons = [];
-  const candidates = Array.from(element.querySelectorAll?.("svg,img,[class*='icon'],[class*='Icon'],i") ?? [])
+  const iconSelector = "svg,img,[class*='icon'],[class*='Icon'],i";
+  const elementStyle = window.getComputedStyle(element);
+  const elementTag = String(element.tagName || "").toLowerCase();
+  const elementClass = classList(element).join(" ");
+  const selfLooksLikeIcon = ["svg", "img", "i"].includes(elementTag) ||
+    /(^|\s|-)icon/i.test(elementClass) ||
+    readStyle(elementStyle, "maskImage") !== "none" ||
+    readStyle(elementStyle, "backgroundImage") !== "none";
+  const candidates = [
+    ...(selfLooksLikeIcon ? [element] : []),
+    ...Array.from(element.querySelectorAll?.(iconSelector) ?? [])
+  ]
+    .filter((child, index, list) => list.indexOf(child) === index)
     .filter((child) => isElementLike(child) && isVisibleChild(child))
     .slice(0, 12);
 

@@ -198,16 +198,64 @@ function createElementStub() {
   return element;
 }
 
+function createIconElementStub() {
+  const parent = {
+    tagName: "SPAN",
+    id: "",
+    classList: ["metric-trend"],
+    parentElement: null,
+    children: [],
+    getAttribute() {
+      return null;
+    }
+  };
+
+  const element = {
+    tagName: "I",
+    id: "",
+    classList: ["trend-up", "iconfont"],
+    textContent: "",
+    parentElement: parent,
+    children: [],
+    outerHTML: "<i class=\"trend-up iconfont\"></i>",
+    matches(selector) {
+      return selector.includes("i") || selector.includes("[class*='icon']");
+    },
+    querySelectorAll() {
+      return [];
+    },
+    getAttribute() {
+      return null;
+    },
+    getBoundingClientRect() {
+      return {
+        x: 336,
+        y: 229,
+        width: 8,
+        height: 8,
+        top: 229,
+        right: 344,
+        bottom: 237,
+        left: 336
+      };
+    }
+  };
+
+  parent.children = [element];
+  return element;
+}
+
 globalThis.window = {
   innerWidth: 1440,
   innerHeight: 900,
   devicePixelRatio: 2,
   getComputedStyle(target) {
     const isParent = target.tagName === "MAIN";
+    const isIcon = target.tagName === "I";
     const isProgressFill = target.classList?.includes?.("n-progress-graph-line-fill");
     return {
-      fontFamily: "Inter, sans-serif",
-      fontSize: isParent ? "18px" : "16px",
+      fontFamily: isIcon ? "iconfont" : "Inter, sans-serif",
+      fontSize: isIcon ? "14px" : isParent ? "18px" : "16px",
       fontWeight: "600",
       lineHeight: "24px",
       letterSpacing: "0px",
@@ -217,15 +265,15 @@ globalThis.window = {
       whiteSpace: isProgressFill ? "nowrap" : "normal",
       wordBreak: "normal",
       textOverflow: isProgressFill ? "ellipsis" : "clip",
-      color: "rgb(255, 255, 255)",
+      color: isIcon ? "rgb(51, 54, 57)" : "rgb(255, 255, 255)",
       backgroundColor: isProgressFill ? "rgb(32, 128, 240)" : "rgb(37, 99, 235)",
       backgroundImage: isProgressFill ? "linear-gradient(90deg, rgb(32, 128, 240), rgb(64, 158, 255))" : "none",
       backgroundSize: isProgressFill ? "200% 100%" : "auto",
       backgroundPosition: "0% 50%",
       opacity: "1",
-      display: isParent ? "flex" : "inline-flex",
-      width: isParent ? "1200px" : isProgressFill ? "180px" : "160px",
-      height: isParent ? "400px" : isProgressFill ? "16px" : "48px",
+      display: isIcon ? "inline-block" : isParent ? "flex" : "inline-flex",
+      width: isIcon ? "8px" : isParent ? "1200px" : isProgressFill ? "180px" : "160px",
+      height: isIcon ? "8px" : isParent ? "400px" : isProgressFill ? "16px" : "48px",
       minWidth: "0px",
       maxWidth: isProgressFill ? "93%" : "none",
       minHeight: "0px",
@@ -263,6 +311,7 @@ globalThis.window = {
       objectFit: "fill",
       objectPosition: "50% 50%",
       aspectRatio: "auto",
+      maskImage: "none",
       length: 10,
       0: "font-size",
       1: "font-weight",
@@ -307,6 +356,7 @@ const reference = extractReferenceFromElement(createElementStub());
 const noChildrenReference = extractReferenceFromElement(createElementStub(), { childLimit: 0 });
 const iconReferenceDisabled = extractReferenceFromElement(createElementStub(), { includeIconDetails: false });
 const iconReferenceEnabled = extractReferenceFromElement(createElementStub(), { includeIconDetails: true });
+const selectedIconReference = extractReferenceFromElement(createIconElementStub(), { includeIconDetails: true });
 
 assert.equal(reference.page.url, "https://example.com/prototype");
 assert.equal(reference.element.tag, "button");
@@ -346,4 +396,9 @@ assert.equal(iconReferenceEnabled.element.iconDetails.length, 1);
 assert.equal(iconReferenceEnabled.element.iconDetails[0].type, "svg");
 assert.equal(iconReferenceEnabled.element.iconDetails[0].viewBox, "0 0 24 24");
 assert.equal(iconReferenceEnabled.element.iconDetails[0].pathCount, 2);
+assert.equal(selectedIconReference.element.iconDetails.length, 1);
+assert.equal(selectedIconReference.element.iconDetails[0].type, "font-or-css");
+assert.equal(selectedIconReference.element.iconDetails[0].selector, "i.trend-up.iconfont");
+assert.equal(selectedIconReference.element.iconDetails[0].className, "trend-up iconfont");
+assert.equal(selectedIconReference.element.iconDetails[0].fontFamily, "iconfont");
 assert.ok(STYLE_GROUPS.font.includes("fontFamily"));
