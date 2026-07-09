@@ -14,6 +14,11 @@
   cursor: copy !important;
 }
 
+.urc-color-target-picking-page,
+.urc-color-target-picking-page * {
+  cursor: crosshair !important;
+}
+
 #ui-reference-copier-root .urc-highlight {
   position: absolute;
   top: 0;
@@ -54,7 +59,7 @@
   top: 20px;
   right: 20px;
   z-index: 2147483647;
-  width: min(430px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 40px);
   overflow: auto;
   box-sizing: border-box;
@@ -166,18 +171,28 @@
 }
 
 #ui-reference-copier-root .urc-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: nowrap;
   gap: 4px;
   margin-top: 10px;
   padding: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid rgba(17, 24, 39, 0.1);
   border-radius: 8px;
   background: #f3f4f6;
+  scrollbar-width: none;
+}
+
+#ui-reference-copier-root .urc-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 #ui-reference-copier-root .urc-tab-button {
+  flex: 0 0 auto;
   min-height: 30px;
+  min-width: 76px;
+  padding: 0 12px;
   border: 0;
   border-radius: 6px;
   color: #4b5563;
@@ -237,20 +252,31 @@
 
 #ui-reference-copier-root .urc-status-pill[data-group-state="saved"],
 #ui-reference-copier-root .urc-status-pill[data-structure-state="saved"],
-#ui-reference-copier-root .urc-status-pill[data-structure-state="ready"] {
+#ui-reference-copier-root .urc-status-pill[data-structure-state="ready"],
+#ui-reference-copier-root .urc-status-pill[data-color-state="partial"] {
   color: #1d4ed8;
   background: #dbeafe;
 }
 
+#ui-reference-copier-root .urc-status-pill[data-color-state="ready"] {
+  color: #047857;
+  background: #d1fae5;
+}
+
 #ui-reference-copier-root .urc-baseline-card,
 #ui-reference-copier-root .urc-group-card,
-#ui-reference-copier-root .urc-structure-card {
+#ui-reference-copier-root .urc-structure-card,
+#ui-reference-copier-root .urc-step-card {
   margin-top: 4px;
   padding: 10px;
   border: 1px solid rgba(17, 24, 39, 0.1);
   border-radius: 8px;
   background: #f9fafb;
   overflow-wrap: anywhere;
+}
+
+#ui-reference-copier-root .urc-step-card + .urc-step-card {
+  margin-top: 10px;
 }
 
 #ui-reference-copier-root .urc-baseline-status,
@@ -438,6 +464,12 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 10px;
+}
+
+@media (max-width: 420px) {
+  #ui-reference-copier-root .urc-button-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 #ui-reference-copier-root .urc-wide-button {

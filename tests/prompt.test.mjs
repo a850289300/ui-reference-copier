@@ -251,11 +251,25 @@ const colorSamples = [
   }
 ];
 const colorSamplePrompt = buildColorSamplePrompt(colorSamples);
-assert.match(colorSamplePrompt, /请只同步下面吸取到的颜色/);
+assert.match(colorSamplePrompt, /请把下面吸取到的颜色应用到当前项目的目标元素上/);
 assert.match(colorSamplePrompt, /1\. rgb\(37, 99, 235\) \/ #2563eb \(背景色 · button\.primary\)/);
 assert.match(colorSamplePrompt, /2\. rgb\(255, 255, 255\) \/ #ffffff \(图标 fill · svg\.icon\)/);
-assert.match(colorSamplePrompt, /不要照搬来源 selector/);
+assert.match(colorSamplePrompt, /不要照搬颜色来源 selector/);
 assert.doesNotMatch(colorSamplePrompt, /子元素 1/);
+
+const targetReference = structuredClone(reference);
+targetReference.page.url = "http://localhost:3000/home";
+targetReference.element.selector = "button.cta";
+targetReference.element.domPath = "html > body > main > button.cta";
+targetReference.element.text = "提交";
+targetReference.element.styles.color.text = "rgb(17, 24, 39)";
+targetReference.element.styles.color.background = "rgb(255, 255, 255)";
+const targetedColorPrompt = buildColorSamplePrompt(colorSamples, "Codex", { targetReference });
+assert.match(targetedColorPrompt, /目标元素/);
+assert.match(targetedColorPrompt, /目标页面: http:\/\/localhost:3000\/home/);
+assert.match(targetedColorPrompt, /当前项目要修改的目标 selector: button\.cta/);
+assert.match(targetedColorPrompt, /目标当前背景色: rgb\(255, 255, 255\)/);
+assert.match(targetedColorPrompt, /优先修改上面标注的「当前项目要修改的目标 selector」/);
 
 const colorSampleValues = buildColorSampleValues(colorSamples);
 assert.match(colorSampleValues, /#2563eb/);

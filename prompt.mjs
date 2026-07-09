@@ -141,6 +141,27 @@ function colorSampleLine(sample, index) {
   return `${index + 1}. ${sample.value}${hex}${source ? ` (${source})` : ""}`;
 }
 
+function targetColorLines(targetReference) {
+  if (!targetReference?.element) {
+    return [];
+  }
+  const element = targetReference.element;
+  const rect = element.rect ?? {};
+  const styles = element.styles ?? {};
+  return [
+    line("目标页面", targetReference.page?.url),
+    line("当前项目要修改的目标 selector", element.selector),
+    line("目标 DOM path", element.domPath),
+    line("目标元素文本", element.text),
+    line("目标位置尺寸", `${rect.x}, ${rect.y}, ${rect.width} x ${rect.height}`),
+    line("目标当前文本色", styles.color?.text),
+    line("目标当前背景色", styles.color?.background),
+    line("目标当前边框", styles.box?.border),
+    line("目标当前阴影", styles.box?.boxShadow),
+    line("目标父级", element.parent?.selector)
+  ];
+}
+
 function formatChildSnapshot(child, index) {
   const rect = child.relativeRect ?? {};
   const styles = child.styles ?? {};
@@ -495,26 +516,31 @@ export function buildColorVars(input) {
   return blocks.join("\n\n");
 }
 
-export function buildColorSamplePrompt(input, target = "Codex / Claude Code") {
+export function buildColorSamplePrompt(input, target = "Codex / Claude Code", options = {}) {
   const samples = normalizeColorSamples(input);
   if (samples.length === 0) {
     return "请先吸取至少一个颜色。";
   }
   const page = samples[0].page ?? {};
+  const targetReference = options.targetReference ?? null;
   return [
-    "请只同步下面吸取到的颜色，不要修改布局、尺寸、字体、DOM 结构和交互逻辑。",
+    "请把下面吸取到的颜色应用到当前项目的目标元素上。",
     "",
-    "这些颜色来自鼠标吸色点附近的真实渲染样式。请映射到当前项目对应元素、已有 class、CSS module、Tailwind class、design token 或样式变量。",
+    "只同步颜色，不要修改布局、尺寸、字体、DOM 结构和交互逻辑。请优先映射到当前项目已有 class、CSS module、Tailwind class、design token 或样式变量。",
     "",
-    block("来源页面", [
+    block("颜色来源页面", [
       line("URL", page.url),
       line("Title", page.title)
     ]),
     block("吸取颜色", samples.map(colorSampleLine)),
+    block("目标元素", targetColorLines(targetReference)),
     "## 修改要求",
     `- 面向 ${target} 修改当前项目源码。`,
+    targetReference
+      ? "- 优先修改上面标注的「当前项目要修改的目标 selector」对应组件或样式。"
+      : "- 当前还没有提供目标元素；如果无法定位，请先询问用户目标元素在哪里。",
     "- 只改颜色相关内容，例如文本色、背景色、边框色、图标 fill/stroke、阴影或主题变量。",
-    "- 不要照搬来源 selector；selector 只用于理解颜色来自哪里。",
+    "- 不要照搬颜色来源 selector；来源 selector 只用于理解颜色来自哪里。",
     "- 如果只需要一个颜色，请优先使用第 1 个颜色。",
     ""
   ].join("\n");
