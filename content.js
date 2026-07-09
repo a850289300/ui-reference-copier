@@ -10,7 +10,7 @@
     { resolveSelectableElement, selectableParent },
     { describeReference, describeReferences },
     { attachCurrentToGroup, buildGroupedDiffPrompt, compareReferenceGroups, createReferenceGroup },
-    { buildStructurePrompt, compareStructureSets }
+    { buildDetailedStructurePrompt, buildStructurePrompt, compareStructureSets }
   ] = await Promise.all([
     import(chrome.runtime.getURL("collector.mjs")),
     import(chrome.runtime.getURL("prompt.mjs")),
@@ -213,8 +213,9 @@
         </label>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-structure" disabled>对比结构</button>
-          <button class="urc-primary" type="button" data-action="copy-structure-diff" disabled>复制结构修复提示词</button>
+          <button class="urc-primary" type="button" data-action="copy-structure-diff" disabled>复制结构差异点</button>
         </div>
+        <button class="urc-secondary urc-wide-button" type="button" data-action="copy-structure-detail" disabled>复制详细结构数据</button>
         <button class="urc-text-button" type="button" data-action="clear-structure">清除结构对比</button>
         <pre class="urc-summary urc-report" data-structure-output>结构对比后会在这里显示层级、子元素数量和节点分布差异。</pre>
       </section>
@@ -259,6 +260,7 @@
   const setStructureCurrentButton = root.querySelector("[data-action='set-structure-current']");
   const compareStructureButton = root.querySelector("[data-action='compare-structure']");
   const copyStructureDiffButton = root.querySelector("[data-action='copy-structure-diff']");
+  const copyStructureDetailButton = root.querySelector("[data-action='copy-structure-detail']");
   const structureOutputEl = root.querySelector("[data-structure-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
@@ -658,6 +660,7 @@
     setStructureCurrentButton.disabled = state.references.length === 0;
     compareStructureButton.disabled = !hasReference || !hasCurrent;
     copyStructureDiffButton.disabled = !hasDiff;
+    copyStructureDetailButton.disabled = !hasDiff;
   }
 
   function renderSelectionCard(container, references) {
@@ -1052,7 +1055,21 @@
       }
       try {
         await copyText(buildStructurePrompt(state.structure.lastDiff));
-        setFeedback("已复制结构修复提示词。");
+        setFeedback("已复制结构差异点提示词。");
+      } catch (error) {
+        setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "copy-structure-detail") {
+      if (!state.structure.lastDiff) {
+        setFeedback("请先对比结构。", "error");
+        return;
+      }
+      try {
+        await copyText(buildDetailedStructurePrompt(state.structure.lastDiff));
+        setFeedback("已复制详细结构数据。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }

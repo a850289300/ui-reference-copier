@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildStructurePrompt, compareStructureSets, structureRiskLines } from "../structure.mjs";
+import { buildDetailedStructurePrompt, buildStructurePrompt, compareStructureSets, structureRiskLines } from "../structure.mjs";
 
 function child(tag, overrides = {}) {
   return {
@@ -117,10 +117,20 @@ assert.ok(structureRiskLines(mismatch).some((line) => line.includes("结构对�
 assert.ok(mismatch.pairs[0].warnings.some((warning) => warning.includes("当前元素可能不是参考元素的同一层级")));
 
 const prompt = buildStructurePrompt(mismatch);
-assert.match(prompt, /请先调整当前项目的 DOM \/ 组件 \/ 布局结构/);
-assert.match(prompt, /先停一下：结构不一致/);
-assert.match(prompt, /不要先处理颜色、字体等细节样式/);
+assert.match(prompt, /结构状态：明显不一致，先不要修样式/);
+assert.match(prompt, /关键结构差异/);
+assert.match(prompt, /建议/);
 assert.match(prompt, /当前项目要修改的元素: span\.generated-text/);
-assert.match(prompt, /参考 tag 分布/);
-assert.match(prompt, /当前 tag 分布/);
-assert.match(prompt, /先补齐缺失的 header\/body\/footer\/chart\/table\/action 等结构区域/);
+assert.match(prompt, /根节点不同/);
+assert.doesNotMatch(prompt, /参考 tag 分布/);
+assert.doesNotMatch(prompt, /逐元素结构数据/);
+
+const detailedPrompt = buildDetailedStructurePrompt(mismatch);
+assert.match(detailedPrompt, /详细结构状态/);
+assert.match(detailedPrompt, /逐元素结构数据/);
+assert.match(detailedPrompt, /参考 tag 分布/);
+assert.match(detailedPrompt, /当前 tag 分布/);
+
+const lowPrompt = buildStructurePrompt(similar);
+assert.match(lowPrompt, /结构状态：基本一致，可继续修样式/);
+assert.doesNotMatch(lowPrompt, /先停一下/);

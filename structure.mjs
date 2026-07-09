@@ -242,6 +242,114 @@ function formatDeltas(items, label) {
   });
 }
 
+function riskLabel(severity) {
+  if (severity === "high") {
+    return "明显不一致";
+  }
+  if (severity === "medium") {
+    return "可能不一致";
+  }
+  return "基本一致";
+}
+
+function riskTitle(severity) {
+  if (severity === "high") {
+    return "结构状态：明显不一致，先不要修样式";
+  }
+  if (severity === "medium") {
+    return "结构状态：可能不一致，建议先确认层级";
+  }
+  return "结构状态：基本一致，可继续修样式";
+}
+
+function maxInsightCount(severity) {
+  if (severity === "high") {
+    return 8;
+  }
+  if (severity === "medium") {
+    return 6;
+  }
+  return 4;
+}
+
+function deltaLines(deltas, label, options = {}) {
+  const threshold = options.threshold ?? 1;
+  const limit = options.limit ?? 4;
+  return deltas
+    .filter((item) => Math.abs(item.delta) >= threshold)
+    .slice(0, limit)
+    .map((item) => {
+      const direction = item.delta > 0 ? "当前更多" : "当前缺少";
+      return `${label} ${item.tag}: 参考 ${item.reference} / 当前 ${item.current}，${direction} ${Math.abs(item.delta)} 个。`;
+    });
+}
+
+function pairInsightLines(pair) {
+  const lines = [];
+  if (pair.reference.tag !== pair.current.tag) {
+    lines.push(`根节点不同：参考是 ${pair.reference.tag}，当前是 ${pair.current.tag}，先确认是否选中同一层级。`);
+  }
+  if (pair.reference.display !== pair.current.display) {
+    lines.push(`布局 display 不同：参考 ${pair.reference.display} / 当前 ${pair.current.display}。`);
+  }
+  if (Math.abs(pair.reference.childCount - pair.current.childCount) >= 6) {
+    lines.push(`子元素数量不同：参考 ${pair.reference.childCount} 个 / 当前 ${pair.current.childCount} 个，优先检查是否缺少标题、进度条、图表、操作区或统计项内部结构。`);
+  }
+  if (pair.reference.isVisibleCard && !pair.current.isVisibleCard) {
+    lines.push("参考像外层卡片，但当前不像可见卡片容器，可能选到了内部文字、图标或透明容器。");
+  }
+  lines.push(...deltaLines(pair.roleDelta, "角色差异", { threshold: 1, limit: 5 }));
+  lines.push(...deltaLines(pair.tagDelta, "节点差异", { threshold: 2, limit: 4 }));
+  if (pair.reference.textCount !== pair.current.textCount) {
+    const direction = pair.current.textCount > pair.reference.textCount ? "当前文本节点更多，可能结构被拍平。" : "当前文本节点更少，可能缺少标题、说明或数值文本。";
+    lines.push(`文本节点数量不同：参考 ${pair.reference.textCount} / 当前 ${pair.current.textCount}，${direction}`);
+  }
+  if (pair.reference.mediaCount !== pair.current.mediaCount) {
+    lines.push(`媒体节点数量不同：参考 ${pair.reference.mediaCount} / 当前 ${pair.current.mediaCount}，检查图片、svg、canvas、图表或图标区域。`);
+  }
+  return Array.from(new Set(lines));
+}
+
+function structureInsightLines(structureDiff) {
+  const limit = maxInsightCount(structureDiff.severity);
+  const lines = structureDiff.pairs.flatMap((pair) => {
+    return pairInsightLines(pair).map((line) => {
+      return structureDiff.pairs.length > 1 ? `元素 ${pair.index}: ${line}` : line;
+    });
+  });
+  if (lines.length === 0) {
+    return ["未发现明显结构差异点，默认继续处理样式差异。"];
+  }
+  const visible = lines.slice(0, limit);
+  const hiddenCount = lines.length - visible.length;
+  if (hiddenCount > 0) {
+    visible.push(`还有 ${hiddenCount} 条结构差异未展开，可复制详细结构数据查看。`);
+  }
+  return visible;
+}
+
+function recommendationLines(structureDiff) {
+  if (structureDiff.severity === "high") {
+    return [
+      "先确认当前 selector 是否选到了参考元素对应的外层容器。",
+      "如果选择正确，先重建 DOM / 组件层级和关键布局区域，再做样式对比。",
+      "结构对齐后重新采集一次，再处理尺寸、颜色、字体、间距和阴影。"
+    ];
+  }
+  if (structureDiff.severity === "medium") {
+    return [
+      "先确认两边是否选中同一层级，尤其是外层卡片、网格容器和内容区。",
+      "如果层级正确，优先补齐关键内部结构，再继续处理样式差异。",
+      "不要只根据颜色、字体、间距硬调，避免掩盖布局缺失。"
+    ];
+  }
+  return [
+    "不需要重新选择外层容器。",
+    "如果视觉差异集中在标题、进度条、图表或统计项，优先检查上面的局部结构差异。",
+    "然后继续处理尺寸、间距、颜色、字体等样式差异。"
+  ];
+}
+
 function formatPair(pair) {
   return [
     `### 元素 ${pair.index}`,
@@ -258,7 +366,56 @@ function formatPair(pair) {
   ].join("\n");
 }
 
-export function buildStructurePrompt(structureDiff) {
+export function buildStructurePrompt(structureDiff, options = {}) {
+  const risks = structureRiskLines(structureDiff);
+  const detail = options.detail ?? "compact";
+  const insightLines = structureInsightLines(structureDiff);
+  const recommendations = recommendationLines(structureDiff);
+  const lines = [
+    `## ${riskTitle(structureDiff.severity)}`,
+    "",
+    `当前项目要修改的元素: ${structureDiff.pairs[0]?.currentSelector ?? "(未知)"}`,
+    `结构相似度: ${structureDiff.score}/100`,
+    `风险等级: ${riskLabel(structureDiff.severity)}`,
+    "",
+    "## 页面",
+    `参考页: ${structureDiff.pages.reference?.url ?? "(未知)"}`,
+    `当前实现页: ${structureDiff.pages.current?.url ?? "(未知)"}`,
+    `对比元素数量: 参考 ${structureDiff.count.reference} / 当前 ${structureDiff.count.current} / 已配对 ${structureDiff.count.compared}`,
+    "",
+    "## 关键结构差异",
+    ...insightLines.map((line) => `- ${line}`),
+    "",
+    "## 建议",
+    ...recommendations.map((line) => `- ${line}`),
+    ""
+  ];
+
+  if (detail !== "full") {
+    return lines.join("\n");
+  }
+
+  lines.push(
+    "## 详细结构状态",
+    ...(risks.length > 0 ? risks.map((line) => `- ${line}`) : ["- 未发现明显结构风险。"]),
+    "",
+    "## 逐元素结构数据",
+    ...structureDiff.pairs.map(formatPair),
+    "",
+    "## 详细版说明",
+    "- 详细版用于排查复杂结构，不建议默认全部交给模型硬改。",
+    "- 默认修复仍应优先参考「关键结构差异」和「建议」。",
+    ""
+  );
+
+  return lines.join("\n");
+}
+
+export function buildDetailedStructurePrompt(structureDiff) {
+  return buildStructurePrompt(structureDiff, { detail: "full" });
+}
+
+export function buildLegacyStructurePrompt(structureDiff) {
   const risks = structureRiskLines(structureDiff);
   return [
     "请先调整当前项目的 DOM / 组件 / 布局结构，让当前实现与参考元素的视觉结构对齐。",
