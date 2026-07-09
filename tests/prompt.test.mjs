@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { buildAiPrompt, buildMultiAiPrompt } from "../prompt.mjs";
+import {
+  buildAiPrompt,
+  buildColorPrompt,
+  buildColorValues,
+  buildColorVars,
+  buildMultiAiPrompt
+} from "../prompt.mjs";
 
 const reference = {
   page: {
@@ -37,13 +43,16 @@ const reference = {
       },
       color: {
         text: "rgb(255, 255, 255)",
-        background: "rgb(37, 99, 235)"
+        background: "rgb(37, 99, 235)",
+        backgroundImage: "linear-gradient(90deg, rgb(37, 99, 235), rgb(79, 70, 229))",
+        opacity: "1"
       },
       box: {
         display: "inline-flex",
         padding: "10px 18px",
         margin: "0px",
         border: "0px none rgb(255, 255, 255)",
+        outline: "2px solid rgb(147, 197, 253)",
         borderRadius: "8px",
         boxShadow: "rgba(0, 0, 0, 0.2) 0px 8px 24px"
       },
@@ -99,8 +108,36 @@ const reference = {
         },
         styleVars: {
           "--n-fill-color": "rgb(32, 128, 240)",
-          "--n-rail-color": "rgb(235, 235, 235)"
+          "--n-rail-color": "rgb(235, 235, 235)",
+          "--n-padding": "12px"
         }
+      }
+    ],
+    styleVars: {
+      "--button-color": "rgb(37, 99, 235)",
+      "--button-text-color": "rgb(255, 255, 255)",
+      "--button-padding": "10px 18px"
+    },
+    iconDetails: [
+      {
+        type: "svg",
+        selector: "svg.icon",
+        rect: { x: 130, y: 250, width: 16, height: 16 },
+        viewBox: "0 0 16 16",
+        pathCount: 1,
+        fill: "rgb(255, 255, 255)",
+        stroke: "rgb(191, 219, 254)",
+        color: "rgb(255, 255, 255)"
+      },
+      {
+        type: "font-or-css",
+        selector: "i.mask-icon",
+        rect: { x: 150, y: 250, width: 16, height: 16 },
+        className: "mask-icon",
+        fontFamily: "iconfont",
+        color: "rgb(37, 99, 235)",
+        backgroundImage: "linear-gradient(red, blue)",
+        maskImage: "url(icon.svg)"
       }
     ],
     ancestorTrail: ["main.hero", "body"],
@@ -131,7 +168,9 @@ assert.match(prompt, /Text: .*white-space nowrap; text-overflow ellipsis/);
 assert.match(prompt, /Visual: .*background-image linear-gradient\(90deg, red, blue\)/);
 assert.match(prompt, /Layout\/Motion: position relative; overflow hidden; transform translateX\(0px\)/);
 assert.match(prompt, /Media: object-fit cover; aspect-ratio 16 \/ 9/);
-assert.match(prompt, /Component vars: --n-fill-color rgb\(32, 128, 240\); --n-rail-color rgb\(235, 235, 235\)/);
+assert.match(prompt, /Component vars: --n-fill-color rgb\(32, 128, 240\)/);
+assert.match(prompt, /--n-padding 12px/);
+assert.match(prompt, /--n-rail-color rgb\(235, 235, 235\)/);
 assert.match(prompt, /不要盲目复制无关 inline style/);
 assert.doesNotMatch(prompt, /外部参考页模式/);
 assert.doesNotMatch(prompt, /结构化 JSON/);
@@ -164,3 +203,31 @@ assert.match(multiPrompt, /整体边界: 120, 160, 320 x 124/);
 assert.match(multiPrompt, /1\. button\.primary/);
 assert.match(multiPrompt, /2\. h1\.title/);
 assert.doesNotMatch(multiPrompt, /结构化 JSON/);
+
+const colorPrompt = buildColorPrompt(reference);
+assert.match(colorPrompt, /请只同步颜色/);
+assert.match(colorPrompt, /不要修改布局、尺寸、字体、DOM 结构/);
+assert.match(colorPrompt, /文本颜色: rgb\(255, 255, 255\)/);
+assert.match(colorPrompt, /背景色: rgb\(37, 99, 235\)/);
+assert.match(colorPrompt, /背景图\/渐变: linear-gradient/);
+assert.match(colorPrompt, /描边 outline: 2px solid rgb\(147, 197, 253\)/);
+assert.match(colorPrompt, /阴影: rgba\(0, 0, 0, 0\.2\) 0px 8px 24px/);
+assert.match(colorPrompt, /图标 1 fill: rgb\(255, 255, 255\)/);
+assert.match(colorPrompt, /图标 2 mask: url\(icon.svg\)/);
+assert.match(colorPrompt, /CSS 变量 --button-color: rgb\(37, 99, 235\)/);
+assert.match(colorPrompt, /子元素 1 变量 --n-fill-color: rgb\(32, 128, 240\)/);
+assert.doesNotMatch(colorPrompt, /--button-padding/);
+assert.doesNotMatch(colorPrompt, /--n-padding/);
+assert.match(colorPrompt, /不要照搬参考页 selector/);
+
+const colorValues = buildColorValues([reference, secondReference]);
+assert.match(colorValues, /元素 1: button\.primary/);
+assert.match(colorValues, /元素 2: h1\.title/);
+assert.match(colorValues, /子元素 1 背景图\/渐变: linear-gradient\(90deg, red, blue\)/);
+
+const colorVars = buildColorVars(reference);
+assert.match(colorVars, /--button-color: rgb\(37, 99, 235\);/);
+assert.match(colorVars, /--button-text-color: rgb\(255, 255, 255\);/);
+assert.match(colorVars, /--n-rail-color: rgb\(235, 235, 235\);/);
+assert.doesNotMatch(colorVars, /--button-padding/);
+assert.doesNotMatch(colorVars, /--n-padding/);

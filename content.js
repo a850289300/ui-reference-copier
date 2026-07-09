@@ -5,7 +5,7 @@
 
   const [
     { extractReferenceFromElement },
-    { buildMultiAiPrompt, buildMultiJson },
+    { buildColorPrompt, buildColorValues, buildColorVars, buildMultiAiPrompt, buildMultiJson },
     { buildDiffPrompt, compareReferenceSets },
     { resolveSelectableElement, selectableParent },
     { describeReference, describeReferences },
@@ -79,6 +79,7 @@
           <li>选中范围太小时，点「选择父级」。</li>
           <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
           <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，Cmd / Ctrl + D 匹配组。</li>
+          <li>如果只想同步颜色，切到「取色」复制颜色提示词或颜色值。</li>
           <li>如果样式差异很多，先用「结构对比」判断两个页面是不是选中了同一层级。</li>
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
@@ -88,6 +89,7 @@
         <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="compare">单组对比</button>
         <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="groups">多组对比</button>
         <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="structure">结构对比</button>
+        <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="color">取色</button>
       </nav>
       <div class="urc-tab-panel" data-tab-panel="capture">
         <section class="urc-section">
@@ -220,6 +222,26 @@
         <pre class="urc-summary urc-report" data-structure-output>结构对比后会在这里显示层级、子元素数量和节点分布差异。</pre>
       </section>
       </div>
+      <div class="urc-tab-panel" data-tab-panel="color" hidden>
+        <section class="urc-section">
+        <div class="urc-section-heading">
+          <p class="urc-label">当前取色对象</p>
+          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+        </div>
+        <div class="urc-target urc-target-compact" data-color-selection>当前未选择元素</div>
+        <p class="urc-note">只提取颜色、背景、边框、阴影、图标色和颜色变量，不要求 AI 改布局。</p>
+        <label class="urc-toggle-field">
+          <input type="checkbox" data-setting="include-icon-details">
+          <span>采集图标细节</span>
+        </label>
+        <pre class="urc-summary urc-report" data-color-output>选中元素后会在这里显示颜色摘要。</pre>
+        <div class="urc-actions">
+          <button class="urc-primary" type="button" data-action="copy-color-prompt" disabled>复制颜色提示词</button>
+          <button class="urc-secondary" type="button" data-action="copy-color-values" disabled>复制颜色值</button>
+          <button class="urc-secondary" type="button" data-action="copy-color-vars" disabled>复制 CSS 变量</button>
+        </div>
+      </section>
+      </div>
     </aside>
     <div class="urc-toast" role="status" hidden></div>
   `;
@@ -232,6 +254,7 @@
   const compareSelectionEl = root.querySelector("[data-compare-selection]");
   const groupSelectionEl = root.querySelector("[data-group-selection]");
   const structureSelectionEl = root.querySelector("[data-structure-selection]");
+  const colorSelectionEl = root.querySelector("[data-color-selection]");
   const summaryEl = root.querySelector(".urc-summary");
   const feedbackEl = root.querySelector(".urc-toast");
   const copyPromptButton = root.querySelector("[data-action='copy-prompt']");
@@ -262,6 +285,10 @@
   const copyStructureDiffButton = root.querySelector("[data-action='copy-structure-diff']");
   const copyStructureDetailButton = root.querySelector("[data-action='copy-structure-detail']");
   const structureOutputEl = root.querySelector("[data-structure-output]");
+  const colorOutputEl = root.querySelector("[data-color-output]");
+  const copyColorPromptButton = root.querySelector("[data-action='copy-color-prompt']");
+  const copyColorValuesButton = root.querySelector("[data-action='copy-color-values']");
+  const copyColorVarsButton = root.querySelector("[data-action='copy-color-vars']");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
   const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
@@ -360,7 +387,7 @@
     if (!CHILD_LIMITS[state.settings.childDepth]) {
       state.settings.childDepth = "standard";
     }
-    if (!["capture", "compare", "groups", "structure"].includes(state.settings.activeTab)) {
+    if (!["capture", "compare", "groups", "structure", "color"].includes(state.settings.activeTab)) {
       state.settings.activeTab = "capture";
     }
     childDepthSelect.value = state.settings.childDepth;
@@ -393,7 +420,7 @@
   }
 
   async function setActiveTab(tab) {
-    if (!["capture", "compare", "groups", "structure"].includes(tab)) {
+    if (!["capture", "compare", "groups", "structure", "color"].includes(tab)) {
       return;
     }
     state.settings.activeTab = tab;
@@ -735,10 +762,15 @@
       compareSelectionEl.textContent = "当前未选择元素";
       groupSelectionEl.textContent = "当前未选择元素";
       structureSelectionEl.textContent = "当前未选择元素";
+      colorSelectionEl.textContent = "当前未选择元素";
       summaryEl.textContent = "点击页面中的元素开始采集。";
+      colorOutputEl.textContent = "选中元素后会在这里显示颜色摘要。";
       copyPromptButton.disabled = true;
       copyFullStyleButton.disabled = true;
       copyJsonButton.disabled = true;
+      copyColorPromptButton.disabled = true;
+      copyColorValuesButton.disabled = true;
+      copyColorVarsButton.disabled = true;
       setBaselineButton.disabled = true;
       addReferenceGroupButton.disabled = true;
       setStructureReferenceButton.disabled = true;
@@ -757,6 +789,7 @@
     renderSelectionCard(compareSelectionEl, references);
     renderSelectionCard(groupSelectionEl, references);
     renderSelectionCard(structureSelectionEl, references);
+    renderSelectionCard(colorSelectionEl, references);
     const primary = references[references.length - 1];
     const { element } = primary;
     const selectionLabel = describeReferences(references);
@@ -791,6 +824,10 @@
     copyPromptButton.disabled = false;
     copyFullStyleButton.disabled = false;
     copyJsonButton.disabled = false;
+    copyColorPromptButton.disabled = false;
+    copyColorValuesButton.disabled = false;
+    copyColorVarsButton.disabled = false;
+    colorOutputEl.textContent = buildColorValues(references);
     setBaselineButton.disabled = false;
     addReferenceGroupButton.disabled = false;
     matchCurrentGroupButton.disabled = state.groups.length === 0;
@@ -1070,6 +1107,48 @@
       try {
         await copyText(buildDetailedStructurePrompt(state.structure.lastDiff));
         setFeedback("已复制详细结构数据。");
+      } catch (error) {
+        setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "copy-color-prompt") {
+      if (state.references.length === 0) {
+        setFeedback("请先选择一个元素。", "error");
+        return;
+      }
+      try {
+        await copyText(buildColorPrompt(state.references));
+        setFeedback("已复制颜色提示词。");
+      } catch (error) {
+        setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "copy-color-values") {
+      if (state.references.length === 0) {
+        setFeedback("请先选择一个元素。", "error");
+        return;
+      }
+      try {
+        await copyText(buildColorValues(state.references));
+        setFeedback("已复制颜色值。");
+      } catch (error) {
+        setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "copy-color-vars") {
+      if (state.references.length === 0) {
+        setFeedback("请先选择一个元素。", "error");
+        return;
+      }
+      try {
+        await copyText(buildColorVars(state.references));
+        setFeedback("已复制颜色 CSS 变量。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }

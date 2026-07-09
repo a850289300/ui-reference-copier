@@ -31,6 +31,106 @@ function inlineVars(styleVars = {}) {
     .join("; ");
 }
 
+function isUsefulColorValue(value) {
+  if (!value || typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized !== "none"
+    && normalized !== "normal"
+    && normalized !== "auto"
+    && normalized !== "transparent"
+    && normalized !== "rgba(0, 0, 0, 0)"
+    && normalized !== "rgb(0, 0, 0, 0)"
+    && normalized !== "initial";
+}
+
+function isColorVarName(name) {
+  return /color|fill|stroke|border|text|bg|background|rail|shadow|mask/i.test(name);
+}
+
+function formatColorToken(label, value) {
+  return isUsefulColorValue(value) ? `- ${label}: ${value}` : null;
+}
+
+function extractColorVars(styleVars = {}) {
+  return Object.entries(styleVars)
+    .filter(([name, value]) => isColorVarName(name) && isUsefulColorValue(value))
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
+function extractIconColorLines(element) {
+  const icons = element.iconDetails ?? [];
+  return icons.flatMap((icon, index) => {
+    const prefix = `图标 ${index + 1}`;
+    if (icon.type === "svg") {
+      return [
+        formatColorToken(`${prefix} fill`, icon.fill),
+        formatColorToken(`${prefix} stroke`, icon.stroke),
+        formatColorToken(`${prefix} color`, icon.color)
+      ].filter(Boolean);
+    }
+    if (icon.type === "font-or-css") {
+      return [
+        formatColorToken(`${prefix} color`, icon.color),
+        formatColorToken(`${prefix} background`, icon.backgroundImage),
+        formatColorToken(`${prefix} mask`, icon.maskImage)
+      ].filter(Boolean);
+    }
+    return [
+      icon.src ? `- ${prefix} 图片源: ${icon.src}` : null
+    ].filter(Boolean);
+  });
+}
+
+function colorLinesForReference(reference) {
+  const element = reference.element;
+  const styles = element.styles ?? {};
+  const color = styles.color ?? {};
+  const box = styles.box ?? {};
+  const vars = extractColorVars(element.styleVars);
+  const rootLines = [
+    formatColorToken("文本颜色", color.text),
+    formatColorToken("背景色", color.background),
+    formatColorToken("背景图/渐变", color.backgroundImage),
+    formatColorToken("边框", box.border),
+    formatColorToken("描边 outline", box.outline),
+    formatColorToken("阴影", box.boxShadow),
+    formatColorToken("透明度", color.opacity)
+  ];
+  const childLines = (element.children ?? []).flatMap((child, index) => {
+    const childStyles = child.styles ?? {};
+    const childVars = extractColorVars(child.styleVars);
+    const lines = [
+      formatColorToken(`子元素 ${index + 1} 文本`, childStyles.color),
+      formatColorToken(`子元素 ${index + 1} 背景`, childStyles.background),
+      formatColorToken(`子元素 ${index + 1} 背景图/渐变`, childStyles.backgroundImage),
+      formatColorToken(`子元素 ${index + 1} 边框`, childStyles.border),
+      formatColorToken(`子元素 ${index + 1} 阴影`, childStyles.boxShadow),
+      ...childVars.map(([name, value]) => `- 子元素 ${index + 1} 变量 ${name}: ${value}`)
+    ].filter(Boolean);
+    return lines.length > 0 ? [`- 子元素 ${index + 1}: ${child.selector}`, ...lines] : [];
+  });
+
+  return [
+    formatColorToken("目标 selector", element.selector),
+    line("位置尺寸", `${element.rect?.x}, ${element.rect?.y}, ${element.rect?.width} x ${element.rect?.height}`),
+    ...rootLines,
+    ...extractIconColorLines(element),
+    ...vars.map(([name, value]) => `- CSS 变量 ${name}: ${value}`),
+    ...childLines
+  ].filter(Boolean);
+}
+
+function colorSectionForReference(reference, index, total) {
+  const title = total > 1 ? `元素 ${index + 1} · ${reference.element.selector}` : "参考颜色";
+  return [`## ${title}`, ...colorLinesForReference(reference), ""].join("\n");
+}
+
+function normalizeReferences(input) {
+  return Array.isArray(input) ? input : [input].filter(Boolean);
+}
+
 function formatChildSnapshot(child, index) {
   const rect = child.relativeRect ?? {};
   const styles = child.styles ?? {};
@@ -327,4 +427,60 @@ export function buildMultiJson(references) {
     bounds: references.length > 0 ? unionRect(references) : null,
     elements: references.map((reference) => reference.element)
   });
+}
+
+export function buildColorPrompt(input, target = "Codex / Claude Code") {
+  const references = normalizeReferences(input);
+  if (references.length === 0) {
+    return "请先选择至少一个元素。";
+  }
+  const page = references[0].page;
+  return [
+    "请只同步颜色，不要修改布局、尺寸、字体、DOM 结构和交互逻辑。",
+    "",
+    "你是根据浏览器真实渲染颜色来调整当前项目。请优先映射到当前项目已有 class、CSS module、Tailwind class、design token 或样式变量；不要照搬参考页 selector。",
+    "",
+    block("来源页面", [
+      line("URL", page.url),
+      line("Title", page.title)
+    ]),
+    ...references.map((reference, index) => colorSectionForReference(reference, index, references.length)),
+    "## 修改要求",
+    `- 面向 ${target} 修改当前项目源码。`,
+    "- 只处理颜色相关内容：文本色、背景色、边框色、阴影、渐变、图标颜色和颜色变量。",
+    "- 不要因为参考 selector 存在就新建同名 class；参考 selector 只用于识别取色范围。",
+    "- 如果当前项目已有主题变量或 design token，优先改变量；否则再改对应组件样式。",
+    ""
+  ].join("\n");
+}
+
+export function buildColorValues(input) {
+  const references = normalizeReferences(input);
+  if (references.length === 0) {
+    return "请先选择至少一个元素。";
+  }
+  return references.map((reference, index) => {
+    const header = references.length > 1 ? `元素 ${index + 1}: ${reference.element.selector}` : reference.element.selector;
+    return [header, ...colorLinesForReference(reference)].join("\n");
+  }).join("\n\n");
+}
+
+export function buildColorVars(input) {
+  const references = normalizeReferences(input);
+  if (references.length === 0) {
+    return "请先选择至少一个元素。";
+  }
+  const blocks = references.map((reference, index) => {
+    const rootVars = extractColorVars(reference.element.styleVars)
+      .map(([name, value]) => `${name}: ${value};`);
+    const childVars = (reference.element.children ?? []).flatMap((child, childIndex) => {
+      const vars = extractColorVars(child.styleVars)
+        .map(([name, value]) => `${name}: ${value};`);
+      return vars.length > 0 ? [`/* 子元素 ${childIndex + 1}: ${child.selector} */`, ...vars] : [];
+    });
+    const lines = [...rootVars, ...childVars];
+    const header = references.length > 1 ? `/* 元素 ${index + 1}: ${reference.element.selector} */` : `/* ${reference.element.selector} */`;
+    return [header, ...(lines.length > 0 ? lines : ["/* 未采集到明显颜色变量 */"])].join("\n");
+  });
+  return blocks.join("\n\n");
 }
