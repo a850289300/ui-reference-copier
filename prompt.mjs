@@ -539,7 +539,10 @@ export function buildColorSamplePrompt(input, target = "Codex / Claude Code", op
     targetReference
       ? "- 优先修改上面标注的「当前项目要修改的目标 selector」对应组件或样式。"
       : "- 当前还没有提供目标元素；如果无法定位，请先询问用户目标元素在哪里。",
-    "- 只改颜色相关内容，例如文本色、背景色、边框色、图标 fill/stroke、阴影或主题变量。",
+    "- 吸取颜色不是默认改文本色；请根据目标元素的实际用途，把颜色应用到最匹配的颜色属性。",
+    "- 可修改的颜色属性包括但不限于：background-color / background / color / border-color / outline-color / box-shadow 颜色 / SVG fill / SVG stroke / iconfont color / mask 背景色 / 主题变量。",
+    "- 如果目标是按钮、卡片、标签、色块、进度条或容器，优先考虑背景色或组件主题色；如果目标是文字或图标，再考虑 color、fill 或 stroke。",
+    "- 只改颜色相关内容，不要改尺寸、间距、布局、字体、DOM 结构或交互逻辑。",
     "- 不要照搬颜色来源 selector；来源 selector 只用于理解颜色来自哪里。",
     "- 如果只需要一个颜色，请优先使用第 1 个颜色。",
     ""
