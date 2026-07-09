@@ -9,18 +9,21 @@
     { buildDiffPrompt, compareReferenceSets },
     { resolveSelectableElement, selectableParent },
     { describeReference, describeReferences },
-    { attachCurrentToGroup, buildGroupedDiffPrompt, compareReferenceGroups, createReferenceGroup }
+    { attachCurrentToGroup, buildGroupedDiffPrompt, compareReferenceGroups, createReferenceGroup },
+    { buildStructurePrompt, compareStructureSets }
   ] = await Promise.all([
     import(chrome.runtime.getURL("collector.mjs")),
     import(chrome.runtime.getURL("prompt.mjs")),
     import(chrome.runtime.getURL("diff.mjs")),
     import(chrome.runtime.getURL("selection.mjs")),
     import(chrome.runtime.getURL("label.mjs")),
-    import(chrome.runtime.getURL("groups.mjs"))
+    import(chrome.runtime.getURL("groups.mjs")),
+    import(chrome.runtime.getURL("structure.mjs"))
   ]);
 
   const BASELINE_KEY = "ui-reference-copier.baseline";
   const GROUPS_KEY = "ui-reference-copier.groups";
+  const STRUCTURE_KEY = "ui-reference-copier.structure";
   const SETTINGS_KEY = "ui-reference-copier.settings";
   const CHILD_LIMITS = {
     compact: 20,
@@ -35,6 +38,11 @@
     references: [],
     baseline: null,
     groups: [],
+    structure: {
+      reference: null,
+      current: null,
+      lastDiff: null
+    },
     selectedGroupId: "",
     lastGroupedDiff: null,
     lastDiff: null,
@@ -71,6 +79,7 @@
           <li>选中范围太小时，点「选择父级」。</li>
           <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
           <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，Cmd / Ctrl + D 匹配组。</li>
+          <li>如果样式差异很多，先用「结构对比」判断两个页面是不是选中了同一层级。</li>
           <li>最后复制提示词给 Codex / Claude Code 修复页面。</li>
         </ol>
       </details>
@@ -78,6 +87,7 @@
         <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="capture">采集</button>
         <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="compare">单组对比</button>
         <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="groups">多组对比</button>
+        <button class="urc-tab-button" type="button" data-action="set-tab" data-tab="structure">结构对比</button>
       </nav>
       <div class="urc-tab-panel" data-tab-panel="capture">
         <section class="urc-section">
@@ -178,6 +188,37 @@
         <pre class="urc-summary urc-report" data-group-diff-output>对比全部组后会在这里显示按组差异。</pre>
       </section>
       </div>
+      <div class="urc-tab-panel" data-tab-panel="structure" hidden>
+        <section class="urc-section">
+        <div class="urc-section-heading">
+          <p class="urc-label">当前选择</p>
+          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+        </div>
+        <div class="urc-target urc-target-compact" data-structure-selection>当前未选择元素</div>
+        <div class="urc-section-heading">
+          <p class="urc-label">结构对比</p>
+          <span class="urc-status-pill" data-structure-state="empty">未设置</span>
+        </div>
+        <div class="urc-structure-card">
+          <div class="urc-structure-status">未设置结构参考</div>
+          <div class="urc-structure-meta">用于判断两个页面是否选中了同一层级，先修 DOM / 组件 / 布局结构。</div>
+        </div>
+        <div class="urc-button-row">
+          <button class="urc-secondary" type="button" data-action="set-structure-reference" disabled>设为结构参考</button>
+          <button class="urc-secondary" type="button" data-action="set-structure-current" disabled>设为当前结构</button>
+        </div>
+        <label class="urc-toggle-field">
+          <input type="checkbox" data-setting="include-icon-details">
+          <span>采集图标细节</span>
+        </label>
+        <div class="urc-button-row">
+          <button class="urc-secondary" type="button" data-action="compare-structure" disabled>对比结构</button>
+          <button class="urc-primary" type="button" data-action="copy-structure-diff" disabled>复制结构修复提示词</button>
+        </div>
+        <button class="urc-text-button" type="button" data-action="clear-structure">清除结构对比</button>
+        <pre class="urc-summary urc-report" data-structure-output>结构对比后会在这里显示层级、子元素数量和节点分布差异。</pre>
+      </section>
+      </div>
     </aside>
     <div class="urc-toast" role="status" hidden></div>
   `;
@@ -189,6 +230,7 @@
   const targetEl = root.querySelector(".urc-target");
   const compareSelectionEl = root.querySelector("[data-compare-selection]");
   const groupSelectionEl = root.querySelector("[data-group-selection]");
+  const structureSelectionEl = root.querySelector("[data-structure-selection]");
   const summaryEl = root.querySelector(".urc-summary");
   const feedbackEl = root.querySelector(".urc-toast");
   const copyPromptButton = root.querySelector("[data-action='copy-prompt']");
@@ -210,6 +252,14 @@
   const compareGroupsButton = root.querySelector("[data-action='compare-groups']");
   const copyGroupDiffButtons = Array.from(root.querySelectorAll("[data-action='copy-group-diff']"));
   const groupDiffOutputEl = root.querySelector("[data-group-diff-output]");
+  const structureStatus = root.querySelector(".urc-structure-status");
+  const structureMeta = root.querySelector(".urc-structure-meta");
+  const structurePill = root.querySelector("[data-structure-state]");
+  const setStructureReferenceButton = root.querySelector("[data-action='set-structure-reference']");
+  const setStructureCurrentButton = root.querySelector("[data-action='set-structure-current']");
+  const compareStructureButton = root.querySelector("[data-action='compare-structure']");
+  const copyStructureDiffButton = root.querySelector("[data-action='copy-structure-diff']");
+  const structureOutputEl = root.querySelector("[data-structure-output]");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
   const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
@@ -308,7 +358,7 @@
     if (!CHILD_LIMITS[state.settings.childDepth]) {
       state.settings.childDepth = "standard";
     }
-    if (!["capture", "compare", "groups"].includes(state.settings.activeTab)) {
+    if (!["capture", "compare", "groups", "structure"].includes(state.settings.activeTab)) {
       state.settings.activeTab = "capture";
     }
     childDepthSelect.value = state.settings.childDepth;
@@ -341,7 +391,7 @@
   }
 
   async function setActiveTab(tab) {
-    if (!["capture", "compare", "groups"].includes(tab)) {
+    if (!["capture", "compare", "groups", "structure"].includes(tab)) {
       return;
     }
     state.settings.activeTab = tab;
@@ -359,6 +409,78 @@
     state.baseline = baseline;
     state.lastDiff = null;
     renderBaselineStatus();
+  }
+
+  function structureSnapshotFromSelection() {
+    return {
+      savedAt: new Date().toISOString(),
+      page: state.references[0]?.page ?? null,
+      references: structuredClone(state.references)
+    };
+  }
+
+  async function loadStructureCompare() {
+    const result = await chrome.storage.local.get(STRUCTURE_KEY);
+    state.structure = {
+      reference: null,
+      current: null,
+      lastDiff: null,
+      ...(result[STRUCTURE_KEY] ?? {})
+    };
+    renderStructureStatus();
+  }
+
+  async function saveStructureCompare(nextStructure) {
+    state.structure = {
+      reference: null,
+      current: null,
+      lastDiff: null,
+      ...nextStructure
+    };
+    await chrome.storage.local.set({ [STRUCTURE_KEY]: state.structure });
+    renderStructureStatus();
+  }
+
+  async function setStructureReference() {
+    await saveStructureCompare({
+      ...state.structure,
+      reference: structureSnapshotFromSelection(),
+      lastDiff: null
+    });
+  }
+
+  async function setStructureCurrent() {
+    await saveStructureCompare({
+      ...state.structure,
+      current: structureSnapshotFromSelection(),
+      lastDiff: null
+    });
+  }
+
+  async function clearStructureCompare() {
+    await chrome.storage.local.remove(STRUCTURE_KEY);
+    state.structure = {
+      reference: null,
+      current: null,
+      lastDiff: null
+    };
+    renderStructureStatus();
+  }
+
+  async function compareStructure() {
+    if (!state.structure.reference || !state.structure.current) {
+      return null;
+    }
+    const lastDiff = compareStructureSets(
+      state.structure.reference.references,
+      state.structure.current.references
+    );
+    await saveStructureCompare({
+      ...state.structure,
+      lastDiff
+    });
+    structureOutputEl.textContent = buildStructurePrompt(lastDiff);
+    return lastDiff;
   }
 
   async function saveBaselineWithFeedback() {
@@ -510,6 +632,34 @@
     });
   }
 
+  function renderStructureStatus() {
+    const hasReference = Boolean(state.structure.reference);
+    const hasCurrent = Boolean(state.structure.current);
+    const hasDiff = Boolean(state.structure.lastDiff);
+    const referenceLabel = hasReference ? describeReferences(state.structure.reference.references).title : "未设置参考";
+    const currentLabel = hasCurrent ? describeReferences(state.structure.current.references).title : "未设置当前结构";
+
+    if (!hasReference && !hasCurrent) {
+      structureStatus.textContent = "未设置结构参考";
+      structureMeta.textContent = "分别保存参考结构和当前结构后，再对比层级、子元素和节点分布。";
+      structurePill.textContent = "未设置";
+      structurePill.dataset.structureState = "empty";
+    } else {
+      structureStatus.textContent = `参考：${referenceLabel} / 当前：${currentLabel}`;
+      structureMeta.textContent = [
+        state.structure.reference?.page?.url ? `参考 ${state.structure.reference.page.url}` : null,
+        state.structure.current?.page?.url ? `当前 ${state.structure.current.page.url}` : null
+      ].filter(Boolean).join(" | ") || "等待补齐两侧结构。";
+      structurePill.textContent = hasDiff ? "已对比" : hasReference && hasCurrent ? "待对比" : "已保存";
+      structurePill.dataset.structureState = hasDiff ? "compared" : hasReference && hasCurrent ? "ready" : "saved";
+    }
+
+    setStructureReferenceButton.disabled = state.references.length === 0;
+    setStructureCurrentButton.disabled = state.references.length === 0;
+    compareStructureButton.disabled = !hasReference || !hasCurrent;
+    copyStructureDiffButton.disabled = !hasDiff;
+  }
+
   function renderSelectionCard(container, references) {
     if (references.length === 0) {
       container.textContent = "当前未选择元素";
@@ -558,12 +708,15 @@
       targetEl.textContent = "还没有选择元素";
       compareSelectionEl.textContent = "当前未选择元素";
       groupSelectionEl.textContent = "当前未选择元素";
+      structureSelectionEl.textContent = "当前未选择元素";
       summaryEl.textContent = "点击页面中的元素开始采集。";
       copyPromptButton.disabled = true;
       copyFullStyleButton.disabled = true;
       copyJsonButton.disabled = true;
       setBaselineButton.disabled = true;
       addReferenceGroupButton.disabled = true;
+      setStructureReferenceButton.disabled = true;
+      setStructureCurrentButton.disabled = true;
       selectParentButtons.forEach((button) => {
         button.disabled = true;
       });
@@ -571,11 +724,13 @@
       copyDiffButton.disabled = true;
       matchCurrentGroupButton.disabled = state.groups.length === 0;
       renderGroupsStatus();
+      renderStructureStatus();
       return;
     }
 
     renderSelectionCard(compareSelectionEl, references);
     renderSelectionCard(groupSelectionEl, references);
+    renderSelectionCard(structureSelectionEl, references);
     const primary = references[references.length - 1];
     const { element } = primary;
     const selectionLabel = describeReferences(references);
@@ -621,6 +776,7 @@
     copyDiffButton.disabled = !state.lastDiff;
     renderBaselineStatus();
     renderGroupsStatus();
+    renderStructureStatus();
   }
 
   function setSelection(element, additive) {
@@ -826,6 +982,17 @@
       return;
     }
 
+    if (action === "clear-structure") {
+      try {
+        await clearStructureCompare();
+        structureOutputEl.textContent = "结构对比后会在这里显示层级、子元素数量和节点分布差异。";
+        setFeedback("已清除结构对比。");
+      } catch (error) {
+        setFeedback(`清除失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
     if (action === "copy-diff") {
       if (!state.lastDiff) {
         setFeedback("请先对比参考。", "error");
@@ -851,6 +1018,34 @@
         setFeedback(detail === "full" ? "已复制详细多组差异。" : "已复制精简多组差异。");
       } catch (error) {
         setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "copy-structure-diff") {
+      if (!state.structure.lastDiff) {
+        setFeedback("请先对比结构。", "error");
+        return;
+      }
+      try {
+        await copyText(buildStructurePrompt(state.structure.lastDiff));
+        setFeedback("已复制结构修复提示词。");
+      } catch (error) {
+        setFeedback(`复制失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
+      }
+      return;
+    }
+
+    if (action === "compare-structure") {
+      try {
+        const structureDiff = await compareStructure();
+        if (!structureDiff) {
+          setFeedback("请先保存结构参考和当前结构。", "error");
+          return;
+        }
+        setFeedback(`已生成结构对比，相似度 ${structureDiff.score}/100。`);
+      } catch (error) {
+        setFeedback(`对比失败：${error instanceof Error ? error.message : "未知错误"}`, "error");
       }
       return;
     }
@@ -897,6 +1092,14 @@
       }
       if (action === "match-current-group") {
         await matchCurrentGroupWithFeedback();
+      }
+      if (action === "set-structure-reference") {
+        await setStructureReference();
+        setFeedback(`已保存结构参考：${describeReferences(state.references).title}`);
+      }
+      if (action === "set-structure-current") {
+        await setStructureCurrent();
+        setFeedback(`已保存当前结构：${describeReferences(state.references).title}`);
       }
       if (action === "compare-baseline") {
         if (!state.baseline) {
@@ -1030,7 +1233,19 @@
       state.lastGroupedDiff = null;
       renderGroupsStatus();
     }
-      if (changes[SETTINGS_KEY]) {
+    if (changes[STRUCTURE_KEY]) {
+      state.structure = {
+        reference: null,
+        current: null,
+        lastDiff: null,
+        ...(changes[STRUCTURE_KEY].newValue ?? {})
+      };
+      renderStructureStatus();
+      structureOutputEl.textContent = state.structure.lastDiff
+        ? buildStructurePrompt(state.structure.lastDiff)
+        : "结构对比后会在这里显示层级、子元素数量和节点分布差异。";
+    }
+    if (changes[SETTINGS_KEY]) {
       state.settings = {
         ...state.settings,
         ...(changes[SETTINGS_KEY].newValue ?? {})
@@ -1054,5 +1269,5 @@
     root.remove();
   }, { once: true });
 
-  void Promise.all([loadBaseline(), loadGroups(), loadSettings()]);
+  void Promise.all([loadBaseline(), loadGroups(), loadStructureCompare(), loadSettings()]);
 })();

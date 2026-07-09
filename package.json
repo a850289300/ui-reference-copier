@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node tests/run.mjs",
-    "check": "node --check background.js && node --check content.js && node --check collector.mjs && node --check prompt.mjs && node --check diff.mjs && node --check selection.mjs && node --check label.mjs && node --check groups.mjs && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8')); console.log('manifest valid')\"",
+    "check": "node --check background.js && node --check content.js && node --check collector.mjs && node --check prompt.mjs && node --check diff.mjs && node --check selection.mjs && node --check label.mjs && node --check groups.mjs && node --check structure.mjs && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8')); console.log('manifest valid')\"",
     "pack": "cd .. && rm -f ui-reference-copier.zip && zip -qr ui-reference-copier.zip ui-reference-copier -x 'ui-reference-copier/.git/*'"
   },
   "keywords": [

@@ -1,4 +1,5 @@
 import { buildDiffPrompt, compareReferenceSets, summarizeDiff } from "./diff.mjs";
+import { structureRiskLines } from "./structure.mjs";
 
 function fallbackId() {
   return `group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -229,9 +230,25 @@ function formatGroupSummary(group) {
   }
 
   const summary = summarizeDiff(group.diff, 8);
+  const structureRisks = structureRiskLines(group.diff.structure);
   return [
     `### 组 ${group.index}：${group.name}`,
+    ...(structureRisks.length > 0 ? structureRisks.slice(0, 3).map((line) => `- ${line}`) : []),
     ...(summary.length > 0 ? summary.map((line) => `- ${line.replace(/^\d+\.\s*/, "")}`) : ["- 未发现明显关键差异。"])
+  ].join("\n");
+}
+
+function formatGroupStructureRisks(group) {
+  const risks = structureRiskLines(group.diff?.structure);
+  if (risks.length === 0) {
+    return [
+      `### 组 ${group.index}：${group.name}`,
+      "- 未发现明显结构风险。"
+    ].join("\n");
+  }
+  return [
+    `### 组 ${group.index}：${group.name}`,
+    ...risks.map((risk) => `- ${risk}`)
   ].join("\n");
 }
 
@@ -264,6 +281,9 @@ export function buildGroupedDiffPrompt(groupedDiff, options = {}) {
     "",
     "## 范围检查",
     ...groupedDiff.groups.map(formatGroupWarnings),
+    "",
+    "## 结构风险提示",
+    ...groupedDiff.groups.map(formatGroupStructureRisks),
     "",
     "## 每组关键差异摘要",
     ...groupedDiff.groups.map(formatGroupSummary),

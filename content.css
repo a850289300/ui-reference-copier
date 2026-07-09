@@ -162,7 +162,7 @@
 
 #ui-reference-copier-root .urc-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   margin-top: 10px;
   padding: 4px;
@@ -224,18 +224,22 @@
 }
 
 #ui-reference-copier-root .urc-status-pill[data-baseline-state="compared"],
-#ui-reference-copier-root .urc-status-pill[data-group-state="compared"] {
+#ui-reference-copier-root .urc-status-pill[data-group-state="compared"],
+#ui-reference-copier-root .urc-status-pill[data-structure-state="compared"] {
   color: #047857;
   background: #d1fae5;
 }
 
-#ui-reference-copier-root .urc-status-pill[data-group-state="saved"] {
+#ui-reference-copier-root .urc-status-pill[data-group-state="saved"],
+#ui-reference-copier-root .urc-status-pill[data-structure-state="saved"],
+#ui-reference-copier-root .urc-status-pill[data-structure-state="ready"] {
   color: #1d4ed8;
   background: #dbeafe;
 }
 
 #ui-reference-copier-root .urc-baseline-card,
-#ui-reference-copier-root .urc-group-card {
+#ui-reference-copier-root .urc-group-card,
+#ui-reference-copier-root .urc-structure-card {
   margin-top: 4px;
   padding: 10px;
   border: 1px solid rgba(17, 24, 39, 0.1);
@@ -245,14 +249,16 @@
 }
 
 #ui-reference-copier-root .urc-baseline-status,
-#ui-reference-copier-root .urc-group-status {
+#ui-reference-copier-root .urc-group-status,
+#ui-reference-copier-root .urc-structure-status {
   margin-top: 0;
   color: #111827;
   font-weight: 700;
 }
 
 #ui-reference-copier-root .urc-baseline-meta,
-#ui-reference-copier-root .urc-group-meta {
+#ui-reference-copier-root .urc-group-meta,
+#ui-reference-copier-root .urc-structure-meta {
   margin-top: 3px;
   font-size: 12px;
 }

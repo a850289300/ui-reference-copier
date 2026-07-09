@@ -1,3 +1,5 @@
+import { compareStructureSets, structureRiskLines } from "./structure.mjs";
+
 const STYLE_FIELDS = [
   ["font.family", (item) => item.element.styles.font.family],
   ["font.size", (item) => item.element.styles.font.size],
@@ -495,6 +497,7 @@ export function compareReferenceSets(baselineReferences, currentReferences) {
   const baselineBounds = unionRect(baselineReferences);
   const currentBounds = unionRect(currentReferences);
   const pairCount = Math.min(baselineReferences.length, currentReferences.length);
+  const structure = compareStructureSets(baselineReferences, currentReferences);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -507,6 +510,7 @@ export function compareReferenceSets(baselineReferences, currentReferences) {
       baseline: baselineReferences[0]?.page ?? null,
       current: currentReferences[0]?.page ?? null
     },
+    structure,
     bounds: baselineBounds && currentBounds ? diffRect(baselineBounds, currentBounds) : null,
     pairs: Array.from({ length: pairCount }, (_, index) => {
       const baseline = baselineReferences[index];
@@ -632,9 +636,15 @@ function formatIconDiffs(icons) {
 
 export function buildDiffPrompt(diff) {
   const summary = summarizeDiff(diff);
+  const riskLines = structureRiskLines(diff.structure);
   return [
     "请根据这些差异调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
     "",
+    riskLines.length > 0 ? [
+      "## 结构风险提示",
+      ...riskLines.map((line) => `- ${line}`),
+      ""
+    ].join("\n") : "",
     "## 页面",
     `参考页: ${diff.pages.baseline?.url ?? "(未知)"}`,
     `当前实现页: ${diff.pages.current?.url ?? "(未知)"}`,
