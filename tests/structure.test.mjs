@@ -134,3 +134,28 @@ assert.match(detailedPrompt, /当前 tag 分布/);
 const lowPrompt = buildStructurePrompt(similar);
 assert.match(lowPrompt, /结构状态：基本一致，可继续修样式/);
 assert.doesNotMatch(lowPrompt, /先停一下/);
+
+const semanticReference = makeReference("div.metrics", {
+  children: [
+    child("div", { attributes: { role: "heading" }, text: "访问量" }),
+    child("div", { attributes: { role: "heading" }, text: "销售额" }),
+    child("div", { attributes: { role: "progressbar" } }),
+    child("div", { attributes: { role: "none" } })
+  ]
+});
+const flattenedCurrent = makeReference("div.dashboard-metrics", {
+  url: "http://localhost:3000",
+  children: [
+    child("div", { attributes: { role: "heading" }, text: "访问量" }),
+    child("span", { text: "销售额" }),
+    child("span", { text: "总访问量" }),
+    child("span", { text: "趋势" })
+  ]
+});
+const semanticPrompt = buildStructurePrompt(compareStructureSets([semanticReference], [flattenedCurrent]));
+assert.match(semanticPrompt, /标题结构不同/);
+assert.match(semanticPrompt, /检查卡片标题、分区标题或统计项标题是否被普通文本替代/);
+assert.match(semanticPrompt, /进度条区域不同/);
+assert.match(semanticPrompt, /普通文本结构不同/);
+assert.match(semanticPrompt, /可能把标题、数值或说明拍平成了普通文本/);
+assert.doesNotMatch(semanticPrompt, /role:none/);

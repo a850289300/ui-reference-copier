@@ -284,6 +284,74 @@ function deltaLines(deltas, label, options = {}) {
     });
 }
 
+function roleName(role) {
+  const normalized = String(role ?? "").replace(/^role:/, "");
+  const names = {
+    heading: "标题结构",
+    progressbar: "进度条区域",
+    button: "按钮区域",
+    a: "链接区域",
+    img: "图片区域",
+    svg: "图标区域",
+    canvas: "图表/canvas 区域",
+    table: "表格区域",
+    input: "输入框区域",
+    textarea: "多行输入区域",
+    select: "选择器区域",
+    text: "普通文本结构"
+  };
+  return names[normalized] ?? `${normalized} 结构`;
+}
+
+function roleAdvice(role, delta) {
+  const normalized = String(role ?? "").replace(/^role:/, "");
+  if (normalized === "none") {
+    return null;
+  }
+  if (normalized === "heading") {
+    return delta < 0
+      ? "检查卡片标题、分区标题或统计项标题是否被普通文本替代。"
+      : "当前标题节点更多，检查是否把普通文本误做成标题。";
+  }
+  if (normalized === "progressbar") {
+    return delta < 0
+      ? "参考里有进度条区域，当前没有对应结构时会影响指标卡片还原。"
+      : "当前进度条区域更多，检查是否多生成了进度条。";
+  }
+  if (normalized === "text") {
+    return delta > 0
+      ? "当前普通文本节点更多，可能把标题、数值或说明拍平成了普通文本。"
+      : "当前普通文本节点更少，可能缺少标题、数值或说明文本。";
+  }
+  if (["button", "a", "input", "textarea", "select"].includes(normalized)) {
+    return delta < 0
+      ? "检查操作区、筛选区或表单控件是否缺失。"
+      : "检查是否多生成了交互控件。";
+  }
+  if (["img", "svg", "canvas"].includes(normalized)) {
+    return delta < 0
+      ? "检查图标、图片、图表或可视化区域是否缺失。"
+      : "检查是否多生成了图标、图片或图表节点。";
+  }
+  if (normalized === "table") {
+    return delta < 0 ? "检查表格结构是否缺失。" : "检查是否多生成了表格结构。";
+  }
+  return delta < 0 ? "检查对应结构区域是否缺失。" : "检查是否多生成了对应结构区域。";
+}
+
+function roleDeltaLines(deltas, options = {}) {
+  const limit = options.limit ?? 5;
+  return deltas
+    .filter((item) => item.tag !== "role:none")
+    .filter((item) => Math.abs(item.delta) >= 1)
+    .slice(0, limit)
+    .map((item) => {
+      const direction = item.delta > 0 ? "当前更多" : "当前缺少";
+      const advice = roleAdvice(item.tag, item.delta);
+      return `${roleName(item.tag)}不同：参考 ${item.reference} 个 / 当前 ${item.current} 个，${direction} ${Math.abs(item.delta)} 个。${advice ? ` ${advice}` : ""}`;
+    });
+}
+
 function pairInsightLines(pair) {
   const lines = [];
   if (pair.reference.tag !== pair.current.tag) {
@@ -298,7 +366,7 @@ function pairInsightLines(pair) {
   if (pair.reference.isVisibleCard && !pair.current.isVisibleCard) {
     lines.push("参考像外层卡片，但当前不像可见卡片容器，可能选到了内部文字、图标或透明容器。");
   }
-  lines.push(...deltaLines(pair.roleDelta, "角色差异", { threshold: 1, limit: 5 }));
+  lines.push(...roleDeltaLines(pair.roleDelta, { limit: 6 }));
   lines.push(...deltaLines(pair.tagDelta, "节点差异", { threshold: 2, limit: 4 }));
   if (pair.reference.textCount !== pair.current.textCount) {
     const direction = pair.current.textCount > pair.reference.textCount ? "当前文本节点更多，可能结构被拍平。" : "当前文本节点更少，可能缺少标题、说明或数值文本。";
