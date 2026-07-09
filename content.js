@@ -37,6 +37,7 @@
     hovered: null,
     selected: [],
     references: [],
+    selectionHistory: [],
     baseline: null,
     groups: [],
     structure: {
@@ -82,7 +83,7 @@
         <summary>使用说明</summary>
         <ol>
           <li>打开参考页，点击要还原的元素。</li>
-          <li>选中范围太小时，点「选择父级」。</li>
+          <li>选中范围太小时，点「选择父级」；选大了可以点「回退」。</li>
           <li>单个区域用「设为参考」和「对比参考」；可按 Cmd / Ctrl + S 快速设为参考。</li>
           <li>多个区域用「保存新参考组」和「匹配当前组」；在多组页可按 Cmd / Ctrl + S 保存组，Cmd / Ctrl + D 匹配组。</li>
           <li>如果只想同步颜色，切到「取色」先吸色，再在目标页选择目标元素。</li>
@@ -101,7 +102,10 @@
         <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前目标</p>
-          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+          <div class="urc-mini-actions">
+            <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+            <button class="urc-mini-button" type="button" data-action="selection-back" disabled>回退</button>
+          </div>
         </div>
         <div class="urc-target">还没有选择元素</div>
       </section>
@@ -137,7 +141,10 @@
         <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前选择</p>
-          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+          <div class="urc-mini-actions">
+            <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+            <button class="urc-mini-button" type="button" data-action="selection-back" disabled>回退</button>
+          </div>
         </div>
         <div class="urc-target urc-target-compact" data-compare-selection>当前未选择元素</div>
         <div class="urc-section-heading">
@@ -167,7 +174,10 @@
         <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前选择</p>
-          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+          <div class="urc-mini-actions">
+            <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+            <button class="urc-mini-button" type="button" data-action="selection-back" disabled>回退</button>
+          </div>
         </div>
         <div class="urc-target urc-target-compact" data-group-selection>当前未选择元素</div>
         <div class="urc-section-heading">
@@ -200,7 +210,10 @@
         <section class="urc-section">
         <div class="urc-section-heading">
           <p class="urc-label">当前选择</p>
-          <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+          <div class="urc-mini-actions">
+            <button class="urc-mini-button" type="button" data-action="select-parent" disabled>选择父级</button>
+            <button class="urc-mini-button" type="button" data-action="selection-back" disabled>回退</button>
+          </div>
         </div>
         <div class="urc-target urc-target-compact" data-structure-selection>当前未选择元素</div>
         <div class="urc-section-heading">
@@ -338,6 +351,7 @@
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
   const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
   const selectParentButtons = Array.from(root.querySelectorAll("[data-action='select-parent']"));
+  const selectionBackButtons = Array.from(root.querySelectorAll("[data-action='selection-back']"));
   const tabButtons = Array.from(root.querySelectorAll("[data-tab]"));
   const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
 
@@ -1157,6 +1171,9 @@
       selectParentButtons.forEach((button) => {
         button.disabled = true;
       });
+      selectionBackButtons.forEach((button) => {
+        button.disabled = true;
+      });
       compareBaselineButton.disabled = true;
       copyDiffButton.disabled = true;
       matchCurrentGroupButton.disabled = state.groups.length === 0;
@@ -1210,6 +1227,10 @@
     selectParentButtons.forEach((button) => {
       button.disabled = !canSelectParent;
     });
+    const canGoBack = state.selectionHistory.length > 0;
+    selectionBackButtons.forEach((button) => {
+      button.disabled = !canGoBack;
+    });
     compareBaselineButton.disabled = !state.baseline;
     copyDiffButton.disabled = !state.lastDiff;
     renderBaselineStatus();
@@ -1223,6 +1244,7 @@
     if (!additive) {
       state.selected = [element];
       state.references = [extractReferenceFromElement(element, options)];
+      state.selectionHistory = [];
       state.lastDiff = null;
       state.lastGroupedDiff = null;
       return;
@@ -1232,6 +1254,7 @@
     if (existingIndex >= 0) {
       state.selected.splice(existingIndex, 1);
       state.references.splice(existingIndex, 1);
+      state.selectionHistory = [];
       state.lastDiff = null;
       state.lastGroupedDiff = null;
       return;
@@ -1239,6 +1262,7 @@
 
     state.selected.push(element);
     state.references.push(extractReferenceFromElement(element, options));
+    state.selectionHistory = [];
     state.lastDiff = null;
     state.lastGroupedDiff = null;
   }
@@ -1260,7 +1284,20 @@
     if (!parent) {
       return false;
     }
+    state.selectionHistory.push({
+      index,
+      element: state.selected[index]
+    });
     replaceSelectionAt(index, parent);
+    return true;
+  }
+
+  function restorePreviousSelection() {
+    const previous = state.selectionHistory.pop();
+    if (!previous?.element || !state.selected[previous.index]) {
+      return false;
+    }
+    replaceSelectionAt(previous.index, previous.element);
     return true;
   }
 
@@ -1304,6 +1341,7 @@
     state.hovered = null;
     state.selected = [];
     state.references = [];
+    state.selectionHistory = [];
     state.lastDiff = null;
     selectedLayer.innerHTML = "";
     panel.hidden = true;
@@ -1685,6 +1723,17 @@
       renderSelection();
       const label = describeReference(state.references[state.references.length - 1]);
       setFeedback(`已切换到父级：${label.name}`);
+      return;
+    }
+
+    if (action === "selection-back") {
+      if (!restorePreviousSelection()) {
+        setFeedback("没有可回退的选择。", "error");
+        return;
+      }
+      renderSelection();
+      const label = describeReference(state.references[state.references.length - 1]);
+      setFeedback(`已回退到：${label.name}`);
       return;
     }
 

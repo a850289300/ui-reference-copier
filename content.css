@@ -508,6 +508,13 @@
   background: #dbeafe;
 }
 
+#ui-reference-copier-root .urc-mini-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 #ui-reference-copier-root .urc-mini-button:disabled {
   color: #9ca3af;
   background: #f9fafb;
