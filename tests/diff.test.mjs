@@ -164,6 +164,7 @@ const current = [
 ];
 
 const diff = compareReferenceSets(baseline, current);
+const rootOnlyDiff = compareReferenceSets(baseline, current, { includeChildren: false });
 
 assert.equal(diff.count.baseline, 2);
 assert.equal(diff.count.current, 2);
@@ -207,6 +208,14 @@ assert.match(prompt, /图标差异/);
 assert.match(prompt, /viewBox: 参考 0 0 24 24 \/ 当前 0 0 20 20/);
 assert.match(prompt, /pathCount: 参考 2 \/ 当前 1/);
 assert.match(prompt, /请根据这些差异调整当前项目/);
+
+assert.equal(rootOnlyDiff.pairs[0].children.length, 0);
+assert.equal(rootOnlyDiff.pairs[0].childComparisonSkipped, true);
+const rootOnlyPrompt = buildDiffPrompt(rootOnlyDiff);
+const rootOnlySummary = summarizeDiff(rootOnlyDiff).join("\n");
+assert.match(rootOnlyPrompt, /已按设置跳过子元素样式对比/);
+assert.match(rootOnlySummary, /已跳过子元素样式对比/);
+assert.doesNotMatch(rootOnlyPrompt, /当前项目子元素: span\.generated-x9/);
 
 const menuBaseline = [
   makeReference("div.reference-menu", { x: 0, y: 64, width: 200, height: 400 }, {

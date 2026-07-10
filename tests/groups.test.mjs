@@ -163,6 +163,11 @@ const recomputedResult = compareReferenceGroups([staleGroup]);
 assert.equal(recomputedResult.groups[0].diff.pairs[0].rect.width.delta, 0);
 assert.equal(recomputedResult.groups[0].diff.pairs[0].styles["color.background"], undefined);
 
+const rootOnlyGroupResult = compareReferenceGroups([matchedA], {
+  diffOptions: { includeChildren: false }
+});
+assert.equal(rootOnlyGroupResult.groups[0].diff.pairs[0].childComparisonSkipped, true);
+
 const prompt = buildGroupedDiffPrompt(result);
 assert.match(prompt, /多组元素对比/);
 assert.match(prompt, /整体布局关系/);

@@ -434,6 +434,16 @@ function childSummaryItems(children = [], pairIndex) {
   });
 }
 
+function skippedChildSummaryItems(pair, pairIndex) {
+  if (!pair.childComparisonSkipped) {
+    return [];
+  }
+  return [{
+    score: 140,
+    text: `元素 ${pairIndex}: 已跳过子元素样式对比，仅对比选中根元素`
+  }];
+}
+
 function iconSummaryItems(icons, pairIndex) {
   if (!icons || (icons.baselineCount === 0 && icons.currentCount === 0)) {
     return [];
@@ -509,7 +519,10 @@ export function summarizeDiff(diff, limit = 10) {
     ...diff.pairs.flatMap((pair) => [
       ...rectSummaryItems(pair.rect, "位置尺寸", `元素 ${pair.index}: `),
       ...styleSummaryItems(pair.styles, `元素 ${pair.index}: `),
-      ...(isMenuPair(diff, pair) ? menuSummaryItems(diff, pair) : childSummaryItems(pair.children, pair.index)),
+      ...(isMenuPair(diff, pair) ? menuSummaryItems(diff, pair) : [
+        ...skippedChildSummaryItems(pair, pair.index),
+        ...childSummaryItems(pair.children, pair.index)
+      ]),
       ...iconSummaryItems(pair.icons, pair.index)
     ])
   ];
@@ -560,11 +573,12 @@ function diffChildren(baseline, current) {
   });
 }
 
-export function compareReferenceSets(baselineReferences, currentReferences) {
+export function compareReferenceSets(baselineReferences, currentReferences, options = {}) {
   const baselineBounds = unionRect(baselineReferences);
   const currentBounds = unionRect(currentReferences);
   const pairCount = Math.min(baselineReferences.length, currentReferences.length);
   const structure = compareStructureSets(baselineReferences, currentReferences);
+  const includeChildren = options.includeChildren !== false;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -594,7 +608,8 @@ export function compareReferenceSets(baselineReferences, currentReferences) {
         },
         rect: diffRect(baseline.element.rect, current.element.rect),
         styles: diffStyles(baseline, current),
-        children: diffChildren(baseline, current),
+        children: includeChildren ? diffChildren(baseline, current) : [],
+        childComparisonSkipped: !includeChildren,
         icons: diffIcons(baseline, current)
       };
     })
@@ -634,7 +649,7 @@ function formatPair(pair) {
     `- height: ${formatDelta(pair.rect.height)}`,
     "样式差异:",
     ...(styleLines.length > 0 ? styleLines : ["- 未发现关键样式差异"]),
-    formatChildDiffs(pair.children),
+    pair.childComparisonSkipped ? formatSkippedChildDiffs() : formatChildDiffs(pair.children),
     formatIconDiffs(pair.icons)
   ].filter(Boolean).join("\n");
 }
@@ -682,6 +697,14 @@ function formatChildDiffs(children = []) {
         ...styleLines
       ];
     })
+  ].join("\n");
+}
+
+function formatSkippedChildDiffs() {
+  return [
+    "子元素差异:",
+    "- 已按设置跳过子元素样式对比；本次只对比选中根元素、整体边界、图标和结构风险。",
+    "- 如果需要排查内部标题、按钮、图标或菜单项样式，再把「样式对比范围」切换为「包含子元素」。"
   ].join("\n");
 }
 

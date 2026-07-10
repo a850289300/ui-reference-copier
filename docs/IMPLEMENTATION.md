@@ -51,6 +51,13 @@ UI Reference Copier 是一个 Chrome MV3 内容脚本插件，核心目标是把
 - 不输出参考 UI 库专属 CSS 变量差异，例如 `--n-*`。
 - 修复要求会强调保留当前项目菜单组件、路由配置或菜单数据源，改菜单项、层级、展开/选中状态和当前组件库样式。
 
+样式对比支持 `includeChildren` 参数：
+
+- `true`: 默认包含采样子元素差异，适合相同组件结构或已经确认子元素层级一致的场景。
+- `false`: 只对比选中根元素、整体边界、图标和结构风险，适合跨 UI 组件库或内部 DOM 差异很大的场景。
+
+`content.js` 的「样式对比范围」会把这个参数传给单组对比和多组对比。多组对比通过 `groups.mjs` 的 `diffOptions` 继续传递给 `compareReferenceSets`。
+
 ## Verification
 
 主要验证命令：

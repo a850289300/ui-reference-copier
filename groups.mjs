@@ -142,11 +142,11 @@ function formatLayoutOverview(groupedDiff) {
   ].join("\n");
 }
 
-function recomputeGroupDiff(group) {
+function recomputeGroupDiff(group, options = {}) {
   if (!group.currentReferences?.length) {
     return null;
   }
-  return compareReferenceSets(group.references, group.currentReferences);
+  return compareReferenceSets(group.references, group.currentReferences, options);
 }
 
 export function createReferenceGroup(references, options = {}) {
@@ -165,7 +165,7 @@ export function createReferenceGroup(references, options = {}) {
 }
 
 export function attachCurrentToGroup(group, currentReferences, options = {}) {
-  const diff = compareReferenceSets(group.references, currentReferences);
+  const diff = compareReferenceSets(group.references, currentReferences, options.diffOptions ?? {});
   return {
     ...clone(group),
     currentPage: currentReferences[0]?.page ?? null,
@@ -175,9 +175,9 @@ export function attachCurrentToGroup(group, currentReferences, options = {}) {
   };
 }
 
-export function compareReferenceGroups(groups) {
+export function compareReferenceGroups(groups, options = {}) {
   const normalizedGroups = groups.map((group, index) => {
-    const diff = recomputeGroupDiff(group);
+    const diff = recomputeGroupDiff(group, options.diffOptions ?? {});
     const status = diff ? "compared" : "missing-current";
     return {
       index: index + 1,

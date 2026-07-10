@@ -37,6 +37,10 @@
     medium: 80,
     full: Number.MAX_SAFE_INTEGER
   };
+  const DIFF_CHILD_MODES = {
+    root: false,
+    children: true
+  };
 
   const state = {
     active: false,
@@ -64,6 +68,7 @@
     settings: {
       childDepth: "standard",
       structureDepth: "medium",
+      diffChildMode: "children",
       includeIconDetails: false,
       externalReferenceMode: false,
       activeTab: "capture"
@@ -171,6 +176,13 @@
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
         </label>
+        <label class="urc-field">
+          <span class="urc-label">样式对比范围</span>
+          <select class="urc-select" data-setting="diff-child-mode">
+            <option value="root">只对比当前元素</option>
+            <option value="children" selected>包含子元素</option>
+          </select>
+        </label>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-baseline" disabled>对比参考</button>
           <button class="urc-primary" type="button" data-action="copy-diff" disabled>复制差异给 AI</button>
@@ -204,6 +216,13 @@
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
+        </label>
+        <label class="urc-field">
+          <span class="urc-label">样式对比范围</span>
+          <select class="urc-select" data-setting="diff-child-mode">
+            <option value="root">只对比当前元素</option>
+            <option value="children" selected>包含子元素</option>
+          </select>
         </label>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-groups" disabled>对比全部组</button>
@@ -365,6 +384,7 @@
   const copyColorVarsButton = root.querySelector("[data-action='copy-color-vars']");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
   const structureDepthSelect = root.querySelector("[data-setting='structure-depth']");
+  const diffChildModeSelects = Array.from(root.querySelectorAll("[data-setting='diff-child-mode']"));
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
   const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
   const selectParentButtons = Array.from(root.querySelectorAll("[data-action='select-parent']"));
@@ -760,11 +780,17 @@
     if (!Object.prototype.hasOwnProperty.call(STRUCTURE_DEPTHS, state.settings.structureDepth)) {
       state.settings.structureDepth = "medium";
     }
+    if (!Object.prototype.hasOwnProperty.call(DIFF_CHILD_MODES, state.settings.diffChildMode)) {
+      state.settings.diffChildMode = "children";
+    }
     if (!["capture", "compare", "groups", "structure", "color"].includes(state.settings.activeTab)) {
       state.settings.activeTab = "capture";
     }
     childDepthSelect.value = state.settings.childDepth;
     structureDepthSelect.value = state.settings.structureDepth;
+    diffChildModeSelects.forEach((select) => {
+      select.value = state.settings.diffChildMode;
+    });
     includeIconDetailsInputs.forEach((input) => {
       input.checked = Boolean(state.settings.includeIconDetails);
     });
@@ -964,7 +990,9 @@
     if (!group) {
       return null;
     }
-    const nextGroup = attachCurrentToGroup(group, state.references);
+    const nextGroup = attachCurrentToGroup(group, state.references, {
+      diffOptions: diffOptions()
+    });
     const groups = state.groups.map((item) => item.id === group.id ? nextGroup : item);
     const nextUnmatched = [
       ...groups.slice(groupIndex + 1),
@@ -1356,6 +1384,12 @@
   function structureCompareOptions() {
     return {
       limit: STRUCTURE_DEPTHS[state.settings.structureDepth] ?? STRUCTURE_DEPTHS.medium
+    };
+  }
+
+  function diffOptions() {
+    return {
+      includeChildren: DIFF_CHILD_MODES[state.settings.diffChildMode] ?? true
     };
   }
 
@@ -1816,7 +1850,7 @@
           setFeedback("请先设置参考。", "error");
           return;
         }
-        state.lastDiff = compareReferenceSets(state.baseline.references, state.references);
+        state.lastDiff = compareReferenceSets(state.baseline.references, state.references, diffOptions());
         copyDiffButton.disabled = false;
         diffOutputEl.textContent = buildDiffPrompt(state.lastDiff);
         setFeedback(
@@ -1825,7 +1859,9 @@
         );
       }
       if (action === "compare-groups") {
-        state.lastGroupedDiff = compareReferenceGroups(state.groups);
+        state.lastGroupedDiff = compareReferenceGroups(state.groups, {
+          diffOptions: diffOptions()
+        });
         copyGroupDiffButtons.forEach((button) => {
           button.disabled = false;
         });
@@ -1874,6 +1910,26 @@
       setFeedback("已更新结构采样深度，下一次结构采集时生效。");
     });
   }, { signal: lifecycle.signal });
+
+  diffChildModeSelects.forEach((select) => {
+    select.addEventListener("change", () => {
+      const mode = select.value;
+      diffChildModeSelects.forEach((item) => {
+        item.value = mode;
+      });
+      void saveSettings({ diffChildMode: mode }).then(() => {
+        state.lastDiff = null;
+        state.lastGroupedDiff = null;
+        copyDiffButton.disabled = true;
+        copyGroupDiffButtons.forEach((button) => {
+          button.disabled = true;
+        });
+        diffOutputEl.textContent = "已更新样式对比范围，请重新对比参考。";
+        groupDiffOutputEl.textContent = "已更新样式对比范围，请重新对比全部组。";
+        setFeedback("已更新样式对比范围。");
+      });
+    }, { signal: lifecycle.signal });
+  });
 
   includeIconDetailsInputs.forEach((input) => {
     input.addEventListener("change", () => {
@@ -2010,12 +2066,20 @@
       if (!Object.prototype.hasOwnProperty.call(STRUCTURE_DEPTHS, state.settings.structureDepth)) {
         state.settings.structureDepth = "medium";
       }
+      if (!Object.prototype.hasOwnProperty.call(DIFF_CHILD_MODES, state.settings.diffChildMode)) {
+        state.settings.diffChildMode = "children";
+      }
       if (childDepthSelect.value !== state.settings.childDepth) {
         childDepthSelect.value = state.settings.childDepth;
       }
       if (structureDepthSelect.value !== state.settings.structureDepth) {
         structureDepthSelect.value = state.settings.structureDepth;
       }
+      diffChildModeSelects.forEach((select) => {
+        if (select.value !== state.settings.diffChildMode) {
+          select.value = state.settings.diffChildMode;
+        }
+      });
       includeIconDetailsInputs.forEach((input) => {
         input.checked = Boolean(state.settings.includeIconDetails);
       });
