@@ -1,5 +1,7 @@
 import { describeReference } from "./label.mjs";
 
+const DEFAULT_STRUCTURE_LIMIT = 80;
+
 function round(value) {
   return Math.round(Number(value) * 100) / 100;
 }
@@ -196,7 +198,7 @@ function isVisibleCard(reference) {
 
 function collectStructure(reference, options = {}) {
   const children = reference.element.children ?? [];
-  const limit = options.limit ?? 24;
+  const limit = options.limit ?? DEFAULT_STRUCTURE_LIMIT;
   const sampledChildren = children.slice(0, limit);
   const label = describeReference(reference);
   return {
@@ -307,9 +309,9 @@ function buildWarnings(referenceStructure, currentStructure, score) {
   return warnings;
 }
 
-function comparePair(reference, current, index) {
-  const referenceStructure = collectStructure(reference);
-  const currentStructure = collectStructure(current);
+function comparePair(reference, current, index, options = {}) {
+  const referenceStructure = collectStructure(reference, options);
+  const currentStructure = collectStructure(current, options);
   const score = structureScore(referenceStructure, currentStructure);
   const severity = severityFromScore(score);
   return {
@@ -326,10 +328,10 @@ function comparePair(reference, current, index) {
   };
 }
 
-export function compareStructureSets(referenceReferences, currentReferences) {
+export function compareStructureSets(referenceReferences, currentReferences, options = {}) {
   const pairCount = Math.min(referenceReferences.length, currentReferences.length);
   const pairs = Array.from({ length: pairCount }, (_, index) => {
-    return comparePair(referenceReferences[index], currentReferences[index], index);
+    return comparePair(referenceReferences[index], currentReferences[index], index, options);
   });
   const worstScore = pairs.length > 0 ? Math.min(...pairs.map((pair) => pair.score)) : 100;
   return {

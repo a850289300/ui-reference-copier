@@ -233,3 +233,33 @@ assert.match(menuPrompt, /当前可能多出的菜单项: 基础列表/);
 const detailedMenuPrompt = buildDetailedStructurePrompt(compareStructureSets([referenceMenu], [currentMenu]));
 assert.match(detailedMenuPrompt, /组件语义差异/);
 assert.match(detailedMenuPrompt, /逐元素结构数据/);
+
+const longReferenceMenuChildren = Array.from({ length: 30 }, (_, index) => {
+  return child("div", {
+    selector: "div.menu-item",
+    attributes: { role: "menuitem" },
+    text: index === 29 ? "组件示例" : `菜单${index + 1}`,
+    relativeRect: { x: 0, y: index * 40, width: 180, height: 40 }
+  });
+});
+const longCurrentMenuChildren = longReferenceMenuChildren
+  .filter((item) => item.text !== "组件示例")
+  .map((item, index) => ({
+    ...item,
+    tag: "li",
+    selector: "li.menu-item",
+    relativeRect: { x: 0, y: index * 40, width: 180, height: 40 }
+  }));
+const longReferenceMenu = makeReference("div.reference-menu", {
+  children: longReferenceMenuChildren
+});
+const longCurrentMenu = makeReference("ul.current-menu", {
+  tag: "ul",
+  children: longCurrentMenuChildren
+});
+
+const compactMenuPrompt = buildStructurePrompt(compareStructureSets([longReferenceMenu], [longCurrentMenu], { limit: 24 }));
+assert.doesNotMatch(compactMenuPrompt, /当前可能缺少的菜单项: 组件示例/);
+
+const fullMenuPrompt = buildStructurePrompt(compareStructureSets([longReferenceMenu], [longCurrentMenu], { limit: Number.MAX_SAFE_INTEGER }));
+assert.match(fullMenuPrompt, /当前可能缺少的菜单项: 组件示例/);

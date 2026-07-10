@@ -32,6 +32,11 @@
     standard: 50,
     detailed: 100
   };
+  const STRUCTURE_DEPTHS = {
+    compact: 24,
+    medium: 80,
+    full: Number.MAX_SAFE_INTEGER
+  };
 
   const state = {
     active: false,
@@ -58,6 +63,7 @@
     panelDrag: null,
     settings: {
       childDepth: "standard",
+      structureDepth: "medium",
       includeIconDetails: false,
       externalReferenceMode: false,
       activeTab: "capture"
@@ -234,6 +240,14 @@
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
         </label>
+        <label class="urc-field">
+          <span class="urc-label">结构采样深度</span>
+          <select class="urc-select" data-setting="structure-depth">
+            <option value="compact">精简 · 24 个</option>
+            <option value="medium" selected>中等 · 80 个</option>
+            <option value="full">全量 · 已采集全部</option>
+          </select>
+        </label>
         <div class="urc-button-row">
           <button class="urc-secondary" type="button" data-action="compare-structure" disabled>对比结构</button>
           <button class="urc-primary" type="button" data-action="copy-structure-diff" disabled>复制结构差异点</button>
@@ -350,6 +364,7 @@
   const copyColorValuesButton = root.querySelector("[data-action='copy-color-values']");
   const copyColorVarsButton = root.querySelector("[data-action='copy-color-vars']");
   const childDepthSelect = root.querySelector("[data-setting='child-depth']");
+  const structureDepthSelect = root.querySelector("[data-setting='structure-depth']");
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
   const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
   const selectParentButtons = Array.from(root.querySelectorAll("[data-action='select-parent']"));
@@ -742,10 +757,14 @@
     if (!Object.prototype.hasOwnProperty.call(CHILD_LIMITS, state.settings.childDepth)) {
       state.settings.childDepth = "standard";
     }
+    if (!Object.prototype.hasOwnProperty.call(STRUCTURE_DEPTHS, state.settings.structureDepth)) {
+      state.settings.structureDepth = "medium";
+    }
     if (!["capture", "compare", "groups", "structure", "color"].includes(state.settings.activeTab)) {
       state.settings.activeTab = "capture";
     }
     childDepthSelect.value = state.settings.childDepth;
+    structureDepthSelect.value = state.settings.structureDepth;
     includeIconDetailsInputs.forEach((input) => {
       input.checked = Boolean(state.settings.includeIconDetails);
     });
@@ -888,7 +907,8 @@
     }
     const lastDiff = compareStructureSets(
       state.structure.reference.references,
-      state.structure.current.references
+      state.structure.current.references,
+      structureCompareOptions()
     );
     await saveStructureCompare({
       ...state.structure,
@@ -1324,9 +1344,18 @@
     const childDepth = state.settings.childDepth === "none" && state.settings.activeTab !== "capture"
       ? "standard"
       : state.settings.childDepth;
+    const childLimit = state.settings.activeTab === "structure"
+      ? STRUCTURE_DEPTHS[state.settings.structureDepth] ?? STRUCTURE_DEPTHS.medium
+      : CHILD_LIMITS[childDepth] ?? CHILD_LIMITS.standard;
     return {
-      childLimit: CHILD_LIMITS[childDepth] ?? CHILD_LIMITS.standard,
+      childLimit,
       includeIconDetails: Boolean(state.settings.includeIconDetails)
+    };
+  }
+
+  function structureCompareOptions() {
+    return {
+      limit: STRUCTURE_DEPTHS[state.settings.structureDepth] ?? STRUCTURE_DEPTHS.medium
     };
   }
 
@@ -1834,6 +1863,18 @@
     });
   }, { signal: lifecycle.signal });
 
+  structureDepthSelect.addEventListener("change", () => {
+    void saveSettings({ structureDepth: structureDepthSelect.value }).then(async () => {
+      await saveStructureCompare({
+        ...state.structure,
+        lastDiff: null
+      });
+      renderStructureStatus();
+      structureOutputEl.textContent = "已更新结构采样深度，请重新保存结构参考和当前结构后再对比。";
+      setFeedback("已更新结构采样深度，下一次结构采集时生效。");
+    });
+  }, { signal: lifecycle.signal });
+
   includeIconDetailsInputs.forEach((input) => {
     input.addEventListener("change", () => {
       const enabled = input.checked;
@@ -1963,8 +2004,17 @@
         ...state.settings,
         ...(changes[SETTINGS_KEY].newValue ?? {})
       };
+      if (!Object.prototype.hasOwnProperty.call(CHILD_LIMITS, state.settings.childDepth)) {
+        state.settings.childDepth = "standard";
+      }
+      if (!Object.prototype.hasOwnProperty.call(STRUCTURE_DEPTHS, state.settings.structureDepth)) {
+        state.settings.structureDepth = "medium";
+      }
       if (childDepthSelect.value !== state.settings.childDepth) {
         childDepthSelect.value = state.settings.childDepth;
+      }
+      if (structureDepthSelect.value !== state.settings.structureDepth) {
+        structureDepthSelect.value = state.settings.structureDepth;
       }
       includeIconDetailsInputs.forEach((input) => {
         input.checked = Boolean(state.settings.includeIconDetails);
