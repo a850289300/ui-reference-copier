@@ -470,13 +470,46 @@ function iconSummaryItems(icons, pairIndex) {
   ];
 }
 
+function structurePairFor(diff, pair) {
+  return diff.structure?.pairs?.find((item) => item.index === pair.index) ?? null;
+}
+
+function isMenuPair(diff, pair) {
+  return Boolean(structurePairFor(diff, pair)?.menuSemantics);
+}
+
+function menuSummaryItems(diff, pair) {
+  const structurePair = structurePairFor(diff, pair);
+  const semantics = structurePair?.menuSemantics;
+  if (!semantics) {
+    return [];
+  }
+  const items = [{
+    score: 130,
+    text: `元素 ${pair.index}: 这是菜单/导航组件，请按菜单树和菜单状态修复，不要按 DOM 子元素顺序逐个改样式`
+  }];
+  if (semantics.missing?.length > 0) {
+    items.push({
+      score: 125,
+      text: `元素 ${pair.index}: 当前可能缺少菜单项 ${semantics.missing.slice(0, 8).join("、")}`
+    });
+  }
+  if (semantics.extra?.length > 0) {
+    items.push({
+      score: 110,
+      text: `元素 ${pair.index}: 当前可能多出菜单项 ${semantics.extra.slice(0, 8).join("、")}`
+    });
+  }
+  return items;
+}
+
 export function summarizeDiff(diff, limit = 10) {
   const items = [
     ...rectSummaryItems(diff.bounds, "整体边界", ""),
     ...diff.pairs.flatMap((pair) => [
       ...rectSummaryItems(pair.rect, "位置尺寸", `元素 ${pair.index}: `),
       ...styleSummaryItems(pair.styles, `元素 ${pair.index}: `),
-      ...childSummaryItems(pair.children, pair.index),
+      ...(isMenuPair(diff, pair) ? menuSummaryItems(diff, pair) : childSummaryItems(pair.children, pair.index)),
       ...iconSummaryItems(pair.icons, pair.index)
     ])
   ];
@@ -689,9 +722,71 @@ function formatIconDiffs(icons) {
   return lines.join("\n");
 }
 
+function formatMenuSemanticBlock(diff) {
+  const menuPairs = diff.pairs
+    .map((pair) => ({ pair, structure: structurePairFor(diff, pair) }))
+    .filter((item) => item.structure?.menuSemantics);
+  if (menuPairs.length === 0) {
+    return "";
+  }
+
+  const lines = [
+    "## 菜单组件对齐模式",
+    "- 这是菜单/导航组件对齐任务，不要照搬参考页面 DOM、class、selector 或 UI 库变量。",
+    "- 不要按 div / ul / li / span / i 的数量差异重写结构；不同组件库内部 DOM 本来就不一样。",
+    "- 请保留当前项目已有菜单组件、路由配置或菜单数据源，优先同步菜单项文本、层级、顺序、展开项、选中项、图标位置和箭头位置。",
+    "- 忽略参考组件库专属变量，例如 `--n-*`；请映射为当前项目已有 class、CSS 变量、组件 props 或主题 token。"
+  ];
+
+  menuPairs.forEach(({ pair, structure }) => {
+    const semantics = structure.menuSemantics;
+    lines.push("");
+    lines.push(`### 元素 ${pair.index} 菜单语义`);
+    lines.push(`当前项目要修改的菜单根: ${pair.currentSelector}`);
+    lines.push("参考菜单语义:");
+    lines.push(...(semantics.referenceTree ?? ["- 未采集到明确菜单项文本"]));
+    lines.push("当前菜单语义:");
+    lines.push(...(semantics.currentTree ?? ["- 未采集到明确菜单项文本"]));
+    if (semantics.missing?.length > 0) {
+      lines.push(`当前可能缺少的菜单项: ${semantics.missing.slice(0, 12).join("、")}`);
+    }
+    if (semantics.extra?.length > 0) {
+      lines.push(`当前可能多出的菜单项: ${semantics.extra.slice(0, 12).join("、")}`);
+    }
+  });
+
+  return lines.join("\n");
+}
+
+function formatMenuPair(pair) {
+  const styleLines = Object.entries(pair.styles).map(([name, value]) => {
+    return `- ${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`;
+  });
+
+  return [
+    `### 元素 ${pair.index}`,
+    `当前项目要修改的菜单根: ${pair.currentSelector}`,
+    `文本: 参考 ${pair.baselineText || "(空)"} / 当前 ${pair.currentText || "(空)"}`,
+    "根容器位置尺寸:",
+    `- x: ${formatDelta(pair.rect.x)}`,
+    `- y: ${formatDelta(pair.rect.y)}`,
+    `- width: ${formatDelta(pair.rect.width)}`,
+    `- height: ${formatDelta(pair.rect.height)}`,
+    "根容器样式差异:",
+    ...(styleLines.length > 0 ? styleLines : ["- 未发现关键样式差异"]),
+    "菜单部件修复重点:",
+    "- 菜单根宽度、整体高度和滚动区域。",
+    "- 一级菜单行高度、顶部间距、图标列宽、文字列宽、箭头列宽。",
+    "- 子菜单行高度、缩进、展开容器高度和 overflow。",
+    "- active / opened / hover 状态下的文字色、图标色、背景色和箭头色。",
+    "- 如果当前内部文字列宽与参考整行宽度不一致，不要直接把文字列改成整行宽；先确认它对应的是文字、图标还是箭头区域。"
+  ].join("\n");
+}
+
 export function buildDiffPrompt(diff) {
   const summary = summarizeDiff(diff);
   const riskLines = structureRiskLines(diff.structure);
+  const menuBlock = formatMenuSemanticBlock(diff);
   return [
     "请根据这些差异调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
     "",
@@ -710,6 +805,8 @@ export function buildDiffPrompt(diff) {
     "## 关键差异摘要",
     ...(summary.length > 0 ? summary : ["未发现明显关键差异。"]),
     "",
+    menuBlock,
+    menuBlock ? "" : "",
     "## 关键视觉基准",
     "下面这些字段即使差异很小也会保留，用来给 AI 明确最终视觉目标，尤其是背景、字体、圆角和 box-shadow。",
     ...diff.pairs.map(formatVisualBaselinePair),
@@ -718,11 +815,12 @@ export function buildDiffPrompt(diff) {
     formatBounds(diff.bounds),
     "",
     "## 逐元素差异",
-    ...diff.pairs.map(formatPair),
+    ...diff.pairs.map((pair) => isMenuPair(diff, pair) ? formatMenuPair(pair) : formatPair(pair)),
     "",
     "## 修复要求",
     "- 优先从共同父级容器、flex/grid、gap、padding、字体 token、颜色 token、圆角和阴影变量入手。",
     "- 参考页面的 class/id/selector 不作为实现目标；请修改上面标注的当前项目 selector，或映射到当前项目已有组件、已有 class、CSS module、Tailwind 或 design token。",
+    "- 如果这是菜单/导航组件，优先修改当前项目菜单数据源、路由配置、菜单组件 props 和当前组件库主题样式；不要迁移参考页面 UI 库 DOM 或专属 CSS 变量。",
     "- 不要用 absolute positioning 或大量 transform 去硬凑，除非原组件本身就是定位布局。",
     "- 如果参考和当前的选择顺序可能不一致，请先说明你如何重新匹配元素。",
     "- 输出时先说明要改哪些源码位置，再给出 patch。",

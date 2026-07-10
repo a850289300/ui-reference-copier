@@ -207,3 +207,88 @@ assert.match(prompt, /图标差异/);
 assert.match(prompt, /viewBox: 参考 0 0 24 24 \/ 当前 0 0 20 20/);
 assert.match(prompt, /pathCount: 参考 2 \/ 当前 1/);
 assert.match(prompt, /请根据这些差异调整当前项目/);
+
+const menuBaseline = [
+  makeReference("div.reference-menu", { x: 0, y: 64, width: 200, height: 400 }, {
+    children: [
+      {
+        signature: "div.menu-root|Dashboard",
+        selector: "div.menu-root",
+        text: "Dashboard",
+        relativeRect: { x: 0, y: 0, width: 200, height: 42 },
+        attributes: { role: "menu" },
+        styles: {
+          width: "200px",
+          height: "42px",
+          color: "rgb(187, 187, 187)",
+          display: "block"
+        },
+        styleVars: {
+          "--n-item-text-color": "#BBB"
+        }
+      },
+      {
+        signature: "div.menu-item|主控台",
+        selector: "div.menu-item",
+        text: "主控台",
+        relativeRect: { x: 24, y: 48, width: 176, height: 42 },
+        attributes: { role: "menuitem" },
+        styles: {
+          width: "200px",
+          height: "42px",
+          color: "rgb(187, 187, 187)",
+          display: "block"
+        },
+        styleVars: {
+          "--n-item-text-color": "#BBB"
+        }
+      }
+    ]
+  })
+];
+const menuCurrent = [
+  makeReference("ul.current-menu", { x: 0, y: 64, width: 200, height: 406 }, {
+    url: "http://localhost:3000",
+    children: [
+      {
+        signature: "li.el-sub-menu|Dashboard",
+        selector: "li.el-sub-menu.is-active",
+        text: "Dashboard",
+        relativeRect: { x: 0, y: 0, width: 200, height: 42 },
+        attributes: { role: "menuitem" },
+        styles: {
+          width: "114px",
+          height: "42px",
+          color: "rgb(255, 255, 255)",
+          display: "list-item"
+        },
+        styleVars: {}
+      },
+      {
+        signature: "li.el-menu-item|主控台",
+        selector: "li.el-menu-item",
+        text: "主控台",
+        relativeRect: { x: 20, y: 48, width: 180, height: 42 },
+        attributes: { role: "menuitem" },
+        styles: {
+          width: "114px",
+          height: "42px",
+          color: "rgb(255, 255, 255)",
+          display: "list-item"
+        },
+        styleVars: {}
+      }
+    ]
+  })
+];
+
+const menuDiff = compareReferenceSets(menuBaseline, menuCurrent);
+const menuPrompt = buildDiffPrompt(menuDiff);
+const menuSummary = summarizeDiff(menuDiff).join("\n");
+assert.match(menuPrompt, /菜单组件对齐模式/);
+assert.match(menuPrompt, /不要按 div \/ ul \/ li \/ span \/ i 的数量差异重写结构/);
+assert.match(menuPrompt, /当前项目要修改的菜单根: ul\.current-menu/);
+assert.match(menuPrompt, /菜单部件修复重点/);
+assert.doesNotMatch(menuPrompt, /子元素差异/);
+assert.doesNotMatch(menuPrompt, /var\.--n-item-text-color/);
+assert.match(menuSummary, /这是菜单\/导航组件/);
