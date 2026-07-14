@@ -2,11 +2,7 @@
 
 这份文档面向第一次使用插件的人，目标是让你不打开 DevTools，也能把参考页面里的 UI 信息复制给 Codex、Claude Code、Cursor 等 AI 编程工具。
 
-下面的图片是操作示意图，用来帮助理解流程；实际插件界面会以当前版本为准。
-
 ## 1. 安装插件
-
-![安装插件](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/01-install.png)
 
 1. 打开 Chrome 地址栏，输入 `chrome://extensions/`。
 2. 开启右上角「开发者模式」。
@@ -15,8 +11,6 @@
 5. 安装后，点击浏览器右上角插件图标即可打开采集面板。
 
 ## 2. 采集一个参考元素
-
-![采集元素](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/02-capture.png)
 
 适合场景：你看到一个按钮、卡片、表格、菜单、统计块，想让 AI 在当前项目里还原它。
 
@@ -36,8 +30,6 @@
 - 如果参考页不是当前项目页面，可以打开「外部参考页模式」，避免模型照搬参考页 class。
 
 ## 3. 跨页面对比
-
-![跨页面对比](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/03-compare.png)
 
 适合场景：你已经有一个当前实现页，但和参考页不够像，需要让 AI 按差异修。
 
@@ -82,8 +74,6 @@
 
 ## 5. 结构对比
 
-![结构对比](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/04-structure.png)
-
 适合场景：AI 按样式差异修了很多次，还是不像。通常这说明两边选中的层级不一致，或者当前页面缺少结构。
 
 1. 切到「结构对比」。
@@ -123,8 +113,6 @@
 - 应优先保留当前项目已有菜单组件、路由配置或菜单数据源。
 
 ## 7. 取色
-
-![取色](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/05-color.png)
 
 适合场景：你只是想从一个页面吸取颜色，再应用到当前项目某个元素上。
 
