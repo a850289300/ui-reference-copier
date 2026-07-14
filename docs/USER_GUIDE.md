@@ -6,7 +6,7 @@
 
 ## 1. 安装插件
 
-![安装插件](./assets/user-guide/01-install.png)
+![安装插件](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/01-install.png)
 
 1. 打开 Chrome 地址栏，输入 `chrome://extensions/`。
 2. 开启右上角「开发者模式」。
@@ -16,7 +16,7 @@
 
 ## 2. 采集一个参考元素
 
-![采集元素](./assets/user-guide/02-capture.png)
+![采集元素](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/02-capture.png)
 
 适合场景：你看到一个按钮、卡片、表格、菜单、统计块，想让 AI 在当前项目里还原它。
 
@@ -37,7 +37,7 @@
 
 ## 3. 跨页面对比
 
-![跨页面对比](./assets/user-guide/03-compare.png)
+![跨页面对比](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/03-compare.png)
 
 适合场景：你已经有一个当前实现页，但和参考页不够像，需要让 AI 按差异修。
 
@@ -82,7 +82,7 @@
 
 ## 5. 结构对比
 
-![结构对比](./assets/user-guide/04-structure.png)
+![结构对比](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/04-structure.png)
 
 适合场景：AI 按样式差异修了很多次，还是不像。通常这说明两边选中的层级不一致，或者当前页面缺少结构。
 
@@ -124,7 +124,7 @@
 
 ## 7. 取色
 
-![取色](./assets/user-guide/05-color.png)
+![取色](https://raw.githubusercontent.com/a850289300/ui-reference-copier/main/docs/assets/user-guide/05-color.png)
 
 适合场景：你只是想从一个页面吸取颜色，再应用到当前项目某个元素上。
 
