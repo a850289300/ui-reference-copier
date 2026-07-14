@@ -33,6 +33,12 @@ UI Reference Copier 是一个免费的 Chrome MV3 插件，用来从参考页面
 - 对 Naive UI 等组件库会采集 `--n-*` 组件变量。
 - 复制成功或失败会显示右上角提示，不遮挡操作。
 
+## 文档
+
+- [使用指南](docs/USER_GUIDE.md)：按步骤说明安装、采集、跨页面对比、多组对比、结构对比、菜单对齐和取色，并配有示意图。
+- [产品理念](docs/PRODUCT_PHILOSOPHY.md)：解释工具为什么存在、解决什么痛点，以及整体设计原则。
+- [实现说明](docs/IMPLEMENTATION.md)：记录核心模块、结构对比、菜单语义对比和验证方式。
+
 ## 安装
 
 1. 打开 `chrome://extensions/`
