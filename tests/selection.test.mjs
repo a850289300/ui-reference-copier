@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { resolveSelectableElement, selectableParent } from "../selection.mjs";
 
-function makeElement(name, rect, children = []) {
+function makeElement(name, rect, children = [], tagName = "DIV") {
   const element = {
     name,
-    tagName: "DIV",
+    tagName,
     parentElement: null,
     children,
     classList: [],
@@ -73,3 +73,31 @@ assert.equal(selectableParent(rightCard), grid);
 
 const farAway = resolveSelectableElement(grid, { x: 320, y: 260 });
 assert.equal(farAway, grid);
+
+const dragIcon = makeElement("drag-icon", {
+  left: 185,
+  top: 10,
+  right: 209,
+  bottom: 34,
+  width: 24,
+  height: 24
+}, [], "svg");
+const title = makeElement("title", {
+  left: 40,
+  top: 0,
+  right: 180,
+  bottom: 44,
+  width: 140,
+  height: 44
+});
+const header = makeElement("header", {
+  left: 0,
+  top: 0,
+  right: 373,
+  bottom: 44,
+  width: 373,
+  height: 44
+}, [title, dragIcon]);
+
+const snappedIcon = resolveSelectableElement(header, { x: 197, y: 22 });
+assert.equal(snappedIcon, dragIcon);

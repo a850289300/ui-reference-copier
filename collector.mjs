@@ -399,8 +399,11 @@ function isVisibleChild(element) {
 }
 
 function isElementLike(value) {
-  if (typeof HTMLElement !== "undefined") {
-    return value instanceof HTMLElement;
+  if (typeof Element !== "undefined" && value instanceof Element) {
+    return true;
+  }
+  if (typeof HTMLElement !== "undefined" && value instanceof HTMLElement) {
+    return true;
   }
   return Boolean(value?.tagName && value?.getBoundingClientRect);
 }
