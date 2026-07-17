@@ -10,7 +10,8 @@
     { resolveSelectableElement, selectableParent },
     { describeReference, describeReferences },
     { attachCurrentToGroup, buildGroupedDiffPrompt, compareReferenceGroups, createReferenceGroup },
-    { buildDetailedStructurePrompt, buildStructurePrompt, compareStructureSets }
+    { buildDetailedStructurePrompt, buildStructurePrompt, compareStructureSets },
+    { copyText }
   ] = await Promise.all([
     import(chrome.runtime.getURL("collector.mjs")),
     import(chrome.runtime.getURL("prompt.mjs")),
@@ -18,7 +19,8 @@
     import(chrome.runtime.getURL("selection.mjs")),
     import(chrome.runtime.getURL("label.mjs")),
     import(chrome.runtime.getURL("groups.mjs")),
-    import(chrome.runtime.getURL("structure.mjs"))
+    import(chrome.runtime.getURL("structure.mjs")),
+    import(chrome.runtime.getURL("clipboard.mjs"))
   ]);
 
   const BASELINE_KEY = "ui-reference-copier.baseline";
@@ -1349,23 +1351,6 @@
     }
     replaceSelectionAt(previous.index, previous.element);
     return true;
-  }
-
-  async function copyText(text) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    textarea.setAttribute("readonly", "true");
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
   }
 
   function captureOptions() {

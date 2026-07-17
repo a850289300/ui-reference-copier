@@ -20,7 +20,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["collector.mjs", "prompt.mjs", "diff.mjs", "selection.mjs", "label.mjs", "groups.mjs", "structure.mjs", "content.css"],
+      "resources": ["collector.mjs", "prompt.mjs", "diff.mjs", "selection.mjs", "label.mjs", "groups.mjs", "structure.mjs", "clipboard.mjs", "content.css"],
       "matches": ["<all_urls>"]
     }
   ]

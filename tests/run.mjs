@@ -1,4 +1,5 @@
 import "./collector.test.mjs";
+import "./clipboard.test.mjs";
 import "./prompt.test.mjs";
 import "./diff.test.mjs";
 import "./selection.test.mjs";
