@@ -757,6 +757,18 @@
     ].join("\n");
   }
 
+  function isExtensionContextInvalidated(error) {
+    return error instanceof Error && /Extension context invalidated/i.test(error.message);
+  }
+
+  function handleAsyncError(error, fallbackMessage = "操作失败") {
+    if (isExtensionContextInvalidated(error)) {
+      setFeedback("插件已更新，请刷新当前页面后继续。", "error");
+      return;
+    }
+    setFeedback(`${fallbackMessage}：${error instanceof Error ? error.message : "未知错误"}`, "error");
+  }
+
   async function loadBaseline() {
     const result = await chrome.storage.local.get(BASELINE_KEY);
     state.baseline = result[BASELINE_KEY] ?? null;
@@ -806,6 +818,7 @@
       ...nextSettings
     };
     await chrome.storage.local.set({ [SETTINGS_KEY]: state.settings });
+    return true;
   }
 
   function renderActiveTab() {
@@ -1877,23 +1890,33 @@
   }, { signal: lifecycle.signal });
 
   childDepthSelect.addEventListener("change", () => {
-    void saveSettings({ childDepth: childDepthSelect.value }).then(() => {
-      state.lastDiff = null;
-      renderBaselineStatus();
-      setFeedback("已更新子元素采样设置，下一次选择元素时生效。");
-    });
+    void (async () => {
+      try {
+        await saveSettings({ childDepth: childDepthSelect.value });
+        state.lastDiff = null;
+        renderBaselineStatus();
+        setFeedback("已更新子元素采样设置，下一次选择元素时生效。");
+      } catch (error) {
+        handleAsyncError(error, "保存设置失败");
+      }
+    })();
   }, { signal: lifecycle.signal });
 
   structureDepthSelect.addEventListener("change", () => {
-    void saveSettings({ structureDepth: structureDepthSelect.value }).then(async () => {
-      await saveStructureCompare({
-        ...state.structure,
-        lastDiff: null
-      });
-      renderStructureStatus();
-      structureOutputEl.textContent = "已更新结构采样深度，请重新保存结构参考和当前结构后再对比。";
-      setFeedback("已更新结构采样深度，下一次结构采集时生效。");
-    });
+    void (async () => {
+      try {
+        await saveSettings({ structureDepth: structureDepthSelect.value });
+        await saveStructureCompare({
+          ...state.structure,
+          lastDiff: null
+        });
+        renderStructureStatus();
+        structureOutputEl.textContent = "已更新结构采样深度，请重新保存结构参考和当前结构后再对比。";
+        setFeedback("已更新结构采样深度，下一次结构采集时生效。");
+      } catch (error) {
+        handleAsyncError(error, "保存设置失败");
+      }
+    })();
   }, { signal: lifecycle.signal });
 
   diffChildModeSelects.forEach((select) => {
@@ -1902,17 +1925,22 @@
       diffChildModeSelects.forEach((item) => {
         item.value = mode;
       });
-      void saveSettings({ diffChildMode: mode }).then(() => {
-        state.lastDiff = null;
-        state.lastGroupedDiff = null;
-        copyDiffButton.disabled = true;
-        copyGroupDiffButtons.forEach((button) => {
-          button.disabled = true;
-        });
-        diffOutputEl.textContent = "已更新样式对比范围，请重新对比参考。";
-        groupDiffOutputEl.textContent = "已更新样式对比范围，请重新对比全部组。";
-        setFeedback("已更新样式对比范围。");
-      });
+      void (async () => {
+        try {
+          await saveSettings({ diffChildMode: mode });
+          state.lastDiff = null;
+          state.lastGroupedDiff = null;
+          copyDiffButton.disabled = true;
+          copyGroupDiffButtons.forEach((button) => {
+            button.disabled = true;
+          });
+          diffOutputEl.textContent = "已更新样式对比范围，请重新对比参考。";
+          groupDiffOutputEl.textContent = "已更新样式对比范围，请重新对比全部组。";
+          setFeedback("已更新样式对比范围。");
+        } catch (error) {
+          handleAsyncError(error, "保存设置失败");
+        }
+      })();
     }, { signal: lifecycle.signal });
   });
 
@@ -1922,32 +1950,47 @@
       includeIconDetailsInputs.forEach((item) => {
         item.checked = enabled;
       });
-      void saveSettings({ includeIconDetails: enabled }).then(() => {
-        state.lastDiff = null;
-        state.lastGroupedDiff = null;
-        renderBaselineStatus();
-        renderGroupsStatus();
-        setFeedback(enabled ? "已开启图标细节采集，下一次选择并保存/匹配元素时生效。" : "已关闭图标细节采集。");
-      });
+      void (async () => {
+        try {
+          await saveSettings({ includeIconDetails: enabled });
+          state.lastDiff = null;
+          state.lastGroupedDiff = null;
+          renderBaselineStatus();
+          renderGroupsStatus();
+          setFeedback(enabled ? "已开启图标细节采集，下一次选择并保存/匹配元素时生效。" : "已关闭图标细节采集。");
+        } catch (error) {
+          handleAsyncError(error, "保存设置失败");
+        }
+      })();
     }, { signal: lifecycle.signal });
   });
 
   externalReferenceModeInput.addEventListener("change", () => {
-    void saveSettings({ externalReferenceMode: externalReferenceModeInput.checked }).then(() => {
-      setFeedback(externalReferenceModeInput.checked
-        ? "已开启外部参考页模式，复制提示词会提醒不要照搬参考类名。"
-        : "已关闭外部参考页模式。");
-    });
+    void (async () => {
+      try {
+        await saveSettings({ externalReferenceMode: externalReferenceModeInput.checked });
+        setFeedback(externalReferenceModeInput.checked
+          ? "已开启外部参考页模式，复制提示词会提醒不要照搬参考类名。"
+          : "已关闭外部参考页模式。");
+      } catch (error) {
+        handleAsyncError(error, "保存设置失败");
+      }
+    })();
   }, { signal: lifecycle.signal });
 
   colorApplyModeSelect.addEventListener("change", () => {
-    void saveColorWorkflow({
-      samples: state.colorSamples,
-      target: state.colorTarget,
-      applyMode: colorApplyModeSelect.value
-    }).then(() => {
-      setFeedback(`颜色应用方式：${colorApplyModeSelect.selectedOptions[0]?.textContent || "自动判断"}`);
-    });
+    void (async () => {
+      try {
+        await saveColorWorkflow({
+          samples: state.colorSamples,
+          target: state.colorTarget,
+          applyMode: colorApplyModeSelect.value
+        });
+        setFeedback(`颜色应用方式：${colorApplyModeSelect.selectedOptions[0]?.textContent || "自动判断"}`);
+      } catch (error) {
+        handleAsyncError(error, "保存颜色设置失败");
+      }
+    })();
   }, { signal: lifecycle.signal });
 
   root.addEventListener("pointerdown", (event) => {
@@ -2075,13 +2118,20 @@
   chrome.storage.onChanged.addListener(storageChangedListener);
 
   lifecycle.signal.addEventListener("abort", () => {
-    chrome.runtime.onMessage.removeListener(runtimeMessageListener);
-    chrome.storage.onChanged.removeListener(storageChangedListener);
+    try {
+      chrome.runtime.onMessage.removeListener(runtimeMessageListener);
+      chrome.storage.onChanged.removeListener(storageChangedListener);
+    } catch {
+      // The extension may have been reloaded; the old content script can only clean up DOM state.
+    }
     document.documentElement.classList.remove("urc-active-page");
     document.documentElement.classList.remove("urc-color-picking-page");
     document.documentElement.classList.remove("urc-color-target-picking-page");
     root.remove();
   }, { once: true });
 
-  void Promise.all([loadBaseline(), loadGroups(), loadStructureCompare(), loadColorWorkflow(), loadSettings()]);
+  void Promise.all([loadBaseline(), loadGroups(), loadStructureCompare(), loadColorWorkflow(), loadSettings()])
+    .catch((error) => {
+      handleAsyncError(error, "加载插件状态失败");
+    });
 })();
