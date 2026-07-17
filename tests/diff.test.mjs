@@ -208,6 +208,9 @@ assert.match(prompt, /图标差异/);
 assert.match(prompt, /viewBox: 参考 0 0 24 24 \/ 当前 0 0 20 20/);
 assert.match(prompt, /pathCount: 参考 2 \/ 当前 1/);
 assert.match(prompt, /请根据这些差异调整当前项目/);
+assert.match(prompt, /## 结构状态：基本一致/);
+assert.doesNotMatch(prompt, /先停一下：结构可能不一致/);
+assert.doesNotMatch(prompt, /建议先切到插件的「结构对比」/);
 
 assert.equal(rootOnlyDiff.pairs[0].children.length, 0);
 assert.equal(rootOnlyDiff.pairs[0].childComparisonSkipped, true);
@@ -216,6 +219,23 @@ const rootOnlySummary = summarizeDiff(rootOnlyDiff).join("\n");
 assert.match(rootOnlyPrompt, /已按设置跳过子元素样式对比/);
 assert.match(rootOnlySummary, /已跳过子元素样式对比/);
 assert.doesNotMatch(rootOnlyPrompt, /当前项目子元素: span\.generated-x9/);
+
+const mismatchedCurrent = [structuredClone(current[0])];
+mismatchedCurrent[0].element.tag = "span";
+mismatchedCurrent[0].element.children = [];
+mismatchedCurrent[0].element.rect = {
+  x: 112,
+  y: 208,
+  width: 24,
+  height: 16,
+  left: 112,
+  top: 208,
+  right: 136,
+  bottom: 224
+};
+const mismatchedPrompt = buildDiffPrompt(compareReferenceSets([baseline[0]], mismatchedCurrent));
+assert.match(mismatchedPrompt, /## 先停一下：结构明显不一致/);
+assert.match(mismatchedPrompt, /建议先切到插件的「结构对比」/);
 
 const menuBaseline = [
   makeReference("div.reference-menu", { x: 0, y: 64, width: 200, height: 400 }, {

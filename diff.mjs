@@ -806,20 +806,47 @@ function formatMenuPair(pair) {
   ].join("\n");
 }
 
-export function buildDiffPrompt(diff) {
-  const summary = summarizeDiff(diff);
-  const riskLines = structureRiskLines(diff.structure);
-  const menuBlock = formatMenuSemanticBlock(diff);
-  return [
-    "请根据这些差异调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
-    "",
-    riskLines.length > 0 ? [
-      "## 先停一下：结构可能不一致",
+function formatStructureGuidance(structure) {
+  const riskLines = structureRiskLines(structure);
+  if (riskLines.length === 0) {
+    return "";
+  }
+
+  if (structure?.severity === "high") {
+    return [
+      "## 先停一下：结构明显不一致",
       "- 如果结构不一致，继续直接修样式很容易越改越偏。",
       ...riskLines.map((line) => `- ${line}`),
       "- 建议先切到插件的「结构对比」，确认两边选中的是同一层级；必要时先修 DOM / 组件布局。",
       ""
-    ].join("\n") : "",
+    ].join("\n");
+  }
+
+  if (structure?.severity === "medium") {
+    return [
+      "## 先确认：结构可能不一致",
+      "- 结构存在一定风险，建议先确认两边选中的是同一层级。",
+      ...riskLines.map((line) => `- ${line}`),
+      "- 如果选择正确，可以先补齐缺失的 DOM / 组件布局区域，再继续修样式。",
+      ""
+    ].join("\n");
+  }
+
+  return [
+    "## 结构状态：基本一致",
+    "- 结构相似度较高，本次主要关注尺寸、间距、颜色、字体、图标和其他样式差异。",
+    ...riskLines.map((line) => `- ${line}`),
+    ""
+  ].join("\n");
+}
+
+export function buildDiffPrompt(diff) {
+  const summary = summarizeDiff(diff);
+  const menuBlock = formatMenuSemanticBlock(diff);
+  return [
+    "请根据这些差异调整当前项目，让当前实现尽量 1:1 对齐参考页面。",
+    "",
+    formatStructureGuidance(diff.structure),
     "## 页面",
     `参考页: ${diff.pages.baseline?.url ?? "(未知)"}`,
     `当前实现页: ${diff.pages.current?.url ?? "(未知)"}`,
