@@ -142,6 +142,30 @@ const reference = {
         maskImage: "url(icon.svg)"
       }
     ],
+    stateStyles: {
+      note: "hover/focus/active/disabled 来自匹配 CSS 规则线索；::before/::after 来自浏览器 computed style。",
+      interactionRules: [
+        {
+          state: ":hover",
+          label: "鼠标移上去 hover",
+          selector: "button.primary:hover",
+          styles: {
+            color: "rgb(255, 255, 255)",
+            "background-color": "rgb(29, 78, 216)"
+          }
+        }
+      ],
+      pseudoElements: [
+        {
+          state: "::before",
+          label: "前置装饰 ::before",
+          styles: {
+            content: "\"*\"",
+            color: "rgb(245, 63, 63)"
+          }
+        }
+      ]
+    },
     ancestorTrail: ["main.hero", "body"],
     fullComputedStyle: {
       "font-size": "16px",
@@ -173,6 +197,10 @@ assert.match(prompt, /Media: object-fit cover; aspect-ratio 16 \/ 9/);
 assert.match(prompt, /Component vars: --n-fill-color rgb\(32, 128, 240\)/);
 assert.match(prompt, /--n-padding 12px/);
 assert.match(prompt, /--n-rail-color rgb\(235, 235, 235\)/);
+assert.match(prompt, /交互状态样式/);
+assert.match(prompt, /鼠标移上去 hover/);
+assert.match(prompt, /button\.primary:hover/);
+assert.match(prompt, /前置装饰 ::before/);
 assert.match(prompt, /不要盲目复制无关 inline style/);
 assert.doesNotMatch(prompt, /外部参考页模式/);
 assert.doesNotMatch(prompt, /结构化 JSON/);

@@ -306,6 +306,33 @@ function buildIconBlock(element) {
   ]);
 }
 
+function formatStateStyles(stateItem, index) {
+  const styles = Object.entries(stateItem.styles ?? {})
+    .map(([name, value]) => `${name}: ${value}`)
+    .join("; ");
+  const selector = stateItem.selector ? ` · CSS: ${stateItem.selector}` : "";
+  return `${index + 1}. ${stateItem.label || stateItem.state}${selector}\n   ${styles}`;
+}
+
+function buildStateStylesBlock(element) {
+  const stateStyles = element.stateStyles;
+  if (!stateStyles) {
+    return "";
+  }
+  const pseudoElements = stateStyles.pseudoElements ?? [];
+  const interactionRules = stateStyles.interactionRules ?? [];
+  if (pseudoElements.length === 0 && interactionRules.length === 0) {
+    return "";
+  }
+  return block("交互状态样式", [
+    stateStyles.note ? `说明：${stateStyles.note}` : null,
+    interactionRules.length > 0 ? "常用交互状态：" : null,
+    ...interactionRules.map(formatStateStyles),
+    pseudoElements.length > 0 ? "前后装饰内容：" : null,
+    ...pseudoElements.map(formatStateStyles)
+  ]);
+}
+
 function unionRect(references) {
   const rects = references.map((item) => item.element.rect);
   const left = Math.min(...rects.map((rect) => rect.left ?? rect.x));
@@ -393,6 +420,7 @@ export function buildAiPrompt(reference, target = "Codex / Claude Code", options
     ]),
     buildChildrenBlock(element),
     buildIconBlock(element),
+    buildStateStylesBlock(element),
     block("参考 HTML", ["```html", element.outerHTML, "```"]),
     includeFullComputedStyle
       ? block("完整 computed CSS", ["```css", `${element.selector} {`, fullStyleBlock, "}", "```"])
@@ -470,6 +498,24 @@ export function buildMultiAiPrompt(references, target = "Codex / Claude Code", o
           `目标 ${referenceIndex + 1} · ${reference.element.selector} · 图标 ${icons.length} 个：`,
           ...icons.map(formatIconDetail)
         ];
+      })
+    ),
+    block(
+      "交互状态样式",
+      references.flatMap((reference, referenceIndex) => {
+        const stateStyles = reference.element.stateStyles;
+        const items = [
+          ...(stateStyles?.interactionRules ?? []),
+          ...(stateStyles?.pseudoElements ?? [])
+        ];
+        if (items.length === 0) {
+          return [];
+        }
+        return [
+          `目标 ${referenceIndex + 1} · ${reference.element.selector}：`,
+          stateStyles?.note ? `说明：${stateStyles.note}` : null,
+          ...items.map(formatStateStyles)
+        ].filter(Boolean);
       })
     ),
     includeFullComputedStyle ? block("完整 computed CSS", ["```css", ...fullStyles, "```"]) : "",

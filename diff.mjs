@@ -385,6 +385,98 @@ function diffIcons(baseline, current) {
   };
 }
 
+function stateItemKey(item) {
+  return `${item.state || ""}|${item.selector || ""}|${item.label || ""}`;
+}
+
+function stateItemLabel(item) {
+  return item?.label || item?.state || "(unknown)";
+}
+
+function diffStateItemStyles(baselineItem, currentItem) {
+  const result = {};
+  Array.from(new Set([
+    ...Object.keys(baselineItem?.styles ?? {}),
+    ...Object.keys(currentItem?.styles ?? {})
+  ])).forEach((name) => {
+    const baselineValue = baselineItem?.styles?.[name] ?? "";
+    const currentValue = currentItem?.styles?.[name] ?? "";
+    if (String(baselineValue) !== String(currentValue)) {
+      result[name] = {
+        baseline: String(baselineValue),
+        current: String(currentValue)
+      };
+    }
+  });
+  return result;
+}
+
+function diffStateCollection(baselineItems = [], currentItems = []) {
+  const currentByKey = new Map(currentItems.map((item) => [stateItemKey(item), item]));
+  const usedKeys = new Set();
+  const items = [];
+
+  baselineItems.forEach((baselineItem, index) => {
+    const key = stateItemKey(baselineItem);
+    const currentItem = currentByKey.get(key) ?? currentItems.find((item) => !usedKeys.has(stateItemKey(item)) && item.state === baselineItem.state);
+    if (!currentItem) {
+      items.push({
+        index: index + 1,
+        label: stateItemLabel(baselineItem),
+        selector: baselineItem.selector,
+        missing: true,
+        styles: diffStateItemStyles(baselineItem, null)
+      });
+      return;
+    }
+    usedKeys.add(stateItemKey(currentItem));
+    const styles = diffStateItemStyles(baselineItem, currentItem);
+    if (Object.keys(styles).length > 0 || baselineItem.selector !== currentItem.selector) {
+      items.push({
+        index: index + 1,
+        label: stateItemLabel(baselineItem),
+        selector: baselineItem.selector,
+        currentSelector: currentItem.selector,
+        styles
+      });
+    }
+  });
+
+  currentItems.forEach((currentItem, offset) => {
+    const key = stateItemKey(currentItem);
+    if (usedKeys.has(key)) {
+      return;
+    }
+    const existsInBaseline = baselineItems.some((item) => stateItemKey(item) === key || item.state === currentItem.state);
+    if (existsInBaseline) {
+      return;
+    }
+    items.push({
+      index: baselineItems.length + offset + 1,
+      label: stateItemLabel(currentItem),
+      selector: currentItem.selector,
+      extra: true,
+      styles: diffStateItemStyles(null, currentItem)
+    });
+  });
+
+  return items;
+}
+
+function diffStateStyles(baseline, current) {
+  const baselineState = baseline.element.stateStyles;
+  const currentState = current.element.stateStyles;
+  if (!baselineState && !currentState) {
+    return null;
+  }
+  return {
+    baselineEnabled: Boolean(baselineState),
+    currentEnabled: Boolean(currentState),
+    interactionRules: diffStateCollection(baselineState?.interactionRules, currentState?.interactionRules),
+    pseudoElements: diffStateCollection(baselineState?.pseudoElements, currentState?.pseudoElements)
+  };
+}
+
 function absoluteDelta(value) {
   return Math.abs(Number(value?.delta ?? 0));
 }
@@ -480,6 +572,25 @@ function iconSummaryItems(icons, pairIndex) {
   ];
 }
 
+function stateSummaryItems(stateStyles, pairIndex) {
+  if (!stateStyles) {
+    return [];
+  }
+  return [
+    ...(stateStyles.interactionRules ?? []),
+    ...(stateStyles.pseudoElements ?? [])
+  ].flatMap((item) => {
+    const context = `元素 ${pairIndex} 的${item.label}: `;
+    if (item.missing) {
+      return [{ score: 115, text: `${context}当前实现缺少对应状态样式` }];
+    }
+    if (item.extra) {
+      return [{ score: 60, text: `${context}当前实现多出状态样式` }];
+    }
+    return styleSummaryItems(item.styles, context);
+  });
+}
+
 function structurePairFor(diff, pair) {
   return diff.structure?.pairs?.find((item) => item.index === pair.index) ?? null;
 }
@@ -523,7 +634,8 @@ export function summarizeDiff(diff, limit = 10) {
         ...skippedChildSummaryItems(pair, pair.index),
         ...childSummaryItems(pair.children, pair.index)
       ]),
-      ...iconSummaryItems(pair.icons, pair.index)
+      ...iconSummaryItems(pair.icons, pair.index),
+      ...stateSummaryItems(pair.stateStyles, pair.index)
     ])
   ];
 
@@ -610,7 +722,8 @@ export function compareReferenceSets(baselineReferences, currentReferences, opti
         styles: diffStyles(baseline, current),
         children: includeChildren ? diffChildren(baseline, current) : [],
         childComparisonSkipped: !includeChildren,
-        icons: diffIcons(baseline, current)
+        icons: diffIcons(baseline, current),
+        stateStyles: diffStateStyles(baseline, current)
       };
     })
   };
@@ -650,7 +763,8 @@ function formatPair(pair) {
     "样式差异:",
     ...(styleLines.length > 0 ? styleLines : ["- 未发现关键样式差异"]),
     pair.childComparisonSkipped ? formatSkippedChildDiffs() : formatChildDiffs(pair.children),
-    formatIconDiffs(pair.icons)
+    formatIconDiffs(pair.icons),
+    formatStateDiffs(pair.stateStyles)
   ].filter(Boolean).join("\n");
 }
 
@@ -745,6 +859,38 @@ function formatIconDiffs(icons) {
   return lines.join("\n");
 }
 
+function formatStateDiffItem(item) {
+  const styleLines = Object.entries(item.styles ?? {}).map(([name, value]) => {
+    return `  - ${name}: 参考 ${value.baseline || "(空)"} / 当前 ${value.current || "(空)"}`;
+  });
+  const selector = item.selector ? `；参考规则 ${item.selector}` : "";
+  const currentSelector = item.currentSelector && item.currentSelector !== item.selector ? `；当前规则 ${item.currentSelector}` : "";
+  if (item.missing) {
+    return [`- ${item.label}${selector}：当前实现缺少`, ...styleLines].join("\n");
+  }
+  if (item.extra) {
+    return [`- ${item.label}${selector}：当前实现多出`, ...styleLines].join("\n");
+  }
+  return [`- ${item.label}${selector}${currentSelector}`, ...styleLines].join("\n");
+}
+
+function formatStateDiffs(stateStyles) {
+  if (!stateStyles) {
+    return "";
+  }
+  if (!stateStyles.baselineEnabled || !stateStyles.currentEnabled) {
+    return "交互状态样式差异:\n- 参考或当前有一侧未开启采集，请重新开启「采集交互状态」后选择元素。";
+  }
+  const lines = [
+    ...(stateStyles.interactionRules ?? []),
+    ...(stateStyles.pseudoElements ?? [])
+  ].map(formatStateDiffItem);
+  return [
+    "交互状态样式差异:",
+    ...(lines.length > 0 ? lines : ["- 未发现采集到的交互状态差异"])
+  ].join("\n");
+}
+
 function formatMenuSemanticBlock(diff) {
   const menuPairs = diff.pairs
     .map((pair) => ({ pair, structure: structurePairFor(diff, pair) }))
@@ -802,8 +948,9 @@ function formatMenuPair(pair) {
     "- 一级菜单行高度、顶部间距、图标列宽、文字列宽、箭头列宽。",
     "- 子菜单行高度、缩进、展开容器高度和 overflow。",
     "- active / opened / hover 状态下的文字色、图标色、背景色和箭头色。",
-    "- 如果当前内部文字列宽与参考整行宽度不一致，不要直接把文字列改成整行宽；先确认它对应的是文字、图标还是箭头区域。"
-  ].join("\n");
+    "- 如果当前内部文字列宽与参考整行宽度不一致，不要直接把文字列改成整行宽；先确认它对应的是文字、图标还是箭头区域。",
+    formatStateDiffs(pair.stateStyles)
+  ].filter(Boolean).join("\n");
 }
 
 function formatStructureGuidance(structure) {

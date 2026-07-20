@@ -113,6 +113,39 @@ const CHILD_STYLE_FIELDS = [
   "objectPosition",
   "aspectRatio"
 ];
+const STATE_STYLE_FIELDS = [
+  "content",
+  "color",
+  "backgroundColor",
+  "backgroundImage",
+  "borderColor",
+  "border",
+  "outline",
+  "boxShadow",
+  "opacity",
+  "display",
+  "width",
+  "height",
+  "padding",
+  "margin",
+  "borderRadius",
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "transform",
+  "transitionDuration",
+  "transitionProperty",
+  "textDecorationLine"
+];
+const INTERACTION_STATES = [
+  { token: ":hover", label: "鼠标移上去 hover" },
+  { token: ":active", label: "点击/按下 active" },
+  { token: ":focus", label: "聚焦 focus" },
+  { token: ":focus-visible", label: "键盘聚焦 focus-visible" },
+  { token: ":disabled", label: "禁用 disabled" }
+];
 
 const TEST_ATTRIBUTES = ["data-testid", "data-test", "data-cy", "data-qa"];
 const CHILD_SELECTOR = [
@@ -289,6 +322,126 @@ function collectComponentStyleVars(style) {
   });
 
   return result;
+}
+
+function isUsefulStateValue(value) {
+  if (!value || typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized !== "normal"
+    && normalized !== "none"
+    && normalized !== "auto"
+    && normalized !== "0px"
+    && normalized !== "rgba(0, 0, 0, 0)"
+    && normalized !== "transparent"
+    && normalized !== "initial";
+}
+
+function stateStyleSnapshot(style, options = {}) {
+  const includeContent = Boolean(options.includeContent);
+  return Object.fromEntries(STATE_STYLE_FIELDS.flatMap((name) => {
+    const value = readStyle(style, name);
+    if (name === "content") {
+      return includeContent && isUsefulStateValue(value) ? [[name, value]] : [];
+    }
+    return isUsefulStateValue(value) ? [[toKebabCase(name), value]] : [];
+  }));
+}
+
+function collectPseudoElementState(element, pseudo) {
+  const style = window.getComputedStyle(element, pseudo);
+  const styles = stateStyleSnapshot(style, { includeContent: true });
+  if (Object.keys(styles).length === 0) {
+    return null;
+  }
+  return {
+    state: pseudo,
+    label: pseudo === "::before" ? "前置装饰 ::before" : "后置装饰 ::after",
+    styles
+  };
+}
+
+function splitSelectors(selectorText) {
+  return String(selectorText ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function stripInteractionSelector(selector, token) {
+  return selector
+    .replaceAll(token, "")
+    .replace(/::before|::after/g, "")
+    .trim();
+}
+
+function selectorMatchesElement(element, selector, token) {
+  const baseSelector = stripInteractionSelector(selector, token);
+  if (!baseSelector || baseSelector === token) {
+    return false;
+  }
+  try {
+    return Boolean(element.matches?.(baseSelector));
+  } catch {
+    return false;
+  }
+}
+
+function collectStyleRules(sheet, result = []) {
+  let rules = [];
+  try {
+    rules = Array.from(sheet.cssRules ?? sheet.rules ?? []);
+  } catch {
+    return result;
+  }
+
+  rules.forEach((rule) => {
+    if (rule.cssRules) {
+      collectStyleRules(rule, result);
+      return;
+    }
+    if (rule.selectorText && rule.style) {
+      result.push(rule);
+    }
+  });
+  return result;
+}
+
+function collectInteractionStateRules(element) {
+  const rules = Array.from(document.styleSheets ?? []).flatMap((sheet) => collectStyleRules(sheet));
+  const matches = [];
+
+  rules.forEach((rule) => {
+    const selectors = splitSelectors(rule.selectorText);
+    INTERACTION_STATES.forEach((state) => {
+      if (!selectors.some((selector) => selector.includes(state.token) && selectorMatchesElement(element, selector, state.token))) {
+        return;
+      }
+      const styles = stateStyleSnapshot(rule.style);
+      if (Object.keys(styles).length === 0) {
+        return;
+      }
+      matches.push({
+        state: state.token,
+        label: state.label,
+        selector: rule.selectorText,
+        styles
+      });
+    });
+  });
+
+  return matches.slice(0, 12);
+}
+
+function collectStateStyles(element) {
+  return {
+    note: "hover/focus/active/disabled 来自匹配 CSS 规则线索；::before/::after 来自浏览器 computed style。",
+    pseudoElements: ["::before", "::after"]
+      .map((pseudo) => collectPseudoElementState(element, pseudo))
+      .filter(Boolean),
+    interactionRules: collectInteractionStateRules(element)
+  };
 }
 
 function getRect(element) {
@@ -580,6 +733,7 @@ export function extractReferenceFromElement(element, options = {}) {
       styleVars: collectComponentStyleVars(style),
       children: collectChildSnapshots(element, rect, options.childLimit ?? DEFAULT_CHILD_SNAPSHOT_LIMIT),
       iconDetails: options.includeIconDetails ? collectIconDetails(element) : undefined,
+      stateStyles: options.includeStateStyles ? collectStateStyles(element) : undefined,
       parent: parentSummary(element),
       ancestorTrail: buildAncestorTrail(element)
     }

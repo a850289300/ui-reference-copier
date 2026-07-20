@@ -29,6 +29,7 @@ UI Reference Copier 是一个免费的 Chrome MV3 插件，用来从参考页面
 - 差异报告会先给关键差异摘要，再附详细信息，可一键复制给 AI 生成修复代码。
 - 多组对比默认复制精简差异，避免 2000 行长提示词；需要完整细节时可单独复制详细差异。
 - 图标细节采集默认关闭，可在需要对比 svg、iconfont、img 图标时手动开启；会采集当前选中元素本身和内部子图标。
+- 交互状态采集默认关闭，可在按钮 hover、输入框 focus、菜单 active、禁用态或表单红星不一致时开启；会采集常用状态规则线索和 `::before` / `::after` 装饰样式。
 - 支持独立「取色」：像吸管一样点击页面颜色点，只复制吸到的颜色提示词或颜色值，不要求 AI 改布局和结构。
 - 对 Naive UI 等组件库会采集 `--n-*` 组件变量。
 - 复制成功或失败会显示右上角提示，不遮挡操作。
@@ -163,6 +164,7 @@ UI Reference Copier 是一个免费的 Chrome MV3 插件，用来从参考页面
 - 面向 Codex / Claude Code 的中文 prompt
 - 可选完整 computed CSS prompt
 - 可选图标摘要：svg viewBox、path 数量、use href、img src、iconfont class、font family、mask/background image 等
+- 可选交互状态摘要：hover、active、focus、focus-visible、disabled 的 CSS 规则线索，以及 `::before` / `::after` 的 computed style
 - 取色摘要：颜色提示词、纯颜色值、颜色 CSS 变量
 - 跨页面差异报告和修复 prompt
 - 多组差异报告和按组修复 prompt

@@ -72,6 +72,7 @@
       structureDepth: "medium",
       diffChildMode: "children",
       includeIconDetails: false,
+      includeStateStyles: false,
       externalReferenceMode: false,
       activeTab: "capture"
     }
@@ -141,6 +142,10 @@
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
         </label>
+        <label class="urc-toggle-field" title="用于 hover、点击、聚焦、禁用、红星和前后装饰等状态差异。">
+          <input type="checkbox" data-setting="include-state-styles">
+          <span>采集交互状态</span>
+        </label>
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="external-reference-mode">
           <span>外部参考页模式</span>
@@ -177,6 +182,10 @@
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
+        </label>
+        <label class="urc-toggle-field" title="用于 hover、点击、聚焦、禁用、红星和前后装饰等状态差异。">
+          <input type="checkbox" data-setting="include-state-styles">
+          <span>采集交互状态</span>
         </label>
         <label class="urc-field">
           <span class="urc-label">样式对比范围</span>
@@ -218,6 +227,10 @@
         <label class="urc-toggle-field">
           <input type="checkbox" data-setting="include-icon-details">
           <span>采集图标细节</span>
+        </label>
+        <label class="urc-toggle-field" title="用于 hover、点击、聚焦、禁用、红星和前后装饰等状态差异。">
+          <input type="checkbox" data-setting="include-state-styles">
+          <span>采集交互状态</span>
         </label>
         <label class="urc-field">
           <span class="urc-label">样式对比范围</span>
@@ -388,6 +401,7 @@
   const structureDepthSelect = root.querySelector("[data-setting='structure-depth']");
   const diffChildModeSelects = Array.from(root.querySelectorAll("[data-setting='diff-child-mode']"));
   const includeIconDetailsInputs = Array.from(root.querySelectorAll("[data-setting='include-icon-details']"));
+  const includeStateStylesInputs = Array.from(root.querySelectorAll("[data-setting='include-state-styles']"));
   const externalReferenceModeInput = root.querySelector("[data-setting='external-reference-mode']");
   const selectParentButtons = Array.from(root.querySelectorAll("[data-action='select-parent']"));
   const selectionBackButtons = Array.from(root.querySelectorAll("[data-action='selection-back']"));
@@ -807,6 +821,9 @@
     });
     includeIconDetailsInputs.forEach((input) => {
       input.checked = Boolean(state.settings.includeIconDetails);
+    });
+    includeStateStylesInputs.forEach((input) => {
+      input.checked = Boolean(state.settings.includeStateStyles);
     });
     externalReferenceModeInput.checked = Boolean(state.settings.externalReferenceMode);
     renderActiveTab();
@@ -1375,7 +1392,8 @@
       : CHILD_LIMITS[childDepth] ?? CHILD_LIMITS.standard;
     return {
       childLimit,
-      includeIconDetails: Boolean(state.settings.includeIconDetails)
+      includeIconDetails: Boolean(state.settings.includeIconDetails),
+      includeStateStyles: Boolean(state.settings.includeStateStyles)
     };
   }
 
@@ -1965,6 +1983,27 @@
     }, { signal: lifecycle.signal });
   });
 
+  includeStateStylesInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      const enabled = input.checked;
+      includeStateStylesInputs.forEach((item) => {
+        item.checked = enabled;
+      });
+      void (async () => {
+        try {
+          await saveSettings({ includeStateStyles: enabled });
+          state.lastDiff = null;
+          state.lastGroupedDiff = null;
+          renderBaselineStatus();
+          renderGroupsStatus();
+          setFeedback(enabled ? "已开启交互状态采集，下一次选择并保存/匹配元素时生效。" : "已关闭交互状态采集。");
+        } catch (error) {
+          handleAsyncError(error, "保存设置失败");
+        }
+      })();
+    }, { signal: lifecycle.signal });
+  });
+
   externalReferenceModeInput.addEventListener("change", () => {
     void (async () => {
       try {
@@ -2110,6 +2149,9 @@
       });
       includeIconDetailsInputs.forEach((input) => {
         input.checked = Boolean(state.settings.includeIconDetails);
+      });
+      includeStateStylesInputs.forEach((input) => {
+        input.checked = Boolean(state.settings.includeStateStyles);
       });
       externalReferenceModeInput.checked = Boolean(state.settings.externalReferenceMode);
       renderActiveTab();

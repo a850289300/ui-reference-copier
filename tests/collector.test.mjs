@@ -249,7 +249,51 @@ globalThis.window = {
   innerWidth: 1440,
   innerHeight: 900,
   devicePixelRatio: 2,
-  getComputedStyle(target) {
+  getComputedStyle(target, pseudo) {
+    if (pseudo === "::before") {
+      return {
+        content: "\"*\"",
+        color: "rgb(245, 63, 63)",
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        backgroundImage: "none",
+        borderColor: "rgb(245, 63, 63)",
+        border: "0px none rgb(245, 63, 63)",
+        outline: "0px none rgb(245, 63, 63)",
+        boxShadow: "none",
+        opacity: "1",
+        display: "inline",
+        width: "auto",
+        height: "auto",
+        padding: "0px",
+        margin: "0px 4px 0px 0px",
+        borderRadius: "0px",
+        position: "static",
+        top: "auto",
+        right: "auto",
+        bottom: "auto",
+        left: "auto",
+        transform: "none",
+        transitionDuration: "0s",
+        transitionProperty: "all",
+        textDecorationLine: "none",
+        getPropertyValue(name) {
+          return {
+            content: "\"*\"",
+            color: "rgb(245, 63, 63)",
+            margin: "0px 4px 0px 0px",
+            display: "inline"
+          }[name] ?? "";
+        }
+      };
+    }
+    if (pseudo === "::after") {
+      return {
+        content: "none",
+        getPropertyValue() {
+          return "";
+        }
+      };
+    }
     const isParent = target.tagName === "MAIN";
     const isIcon = target.tagName === "I";
     const isProgressFill = target.classList?.includes?.("n-progress-graph-line-fill");
@@ -349,13 +393,37 @@ globalThis.document = {
   documentElement: {
     clientWidth: 1440,
     clientHeight: 900
-  }
+  },
+  styleSheets: [
+    {
+      cssRules: [
+        {
+          selectorText: "button.primary:hover",
+          style: {
+            length: 3,
+            0: "color",
+            1: "background-color",
+            2: "box-shadow",
+            getPropertyValue(name) {
+              return {
+                color: "rgb(255, 255, 255)",
+                "background-color": "rgb(29, 78, 216)",
+                "box-shadow": "rgba(37, 99, 235, 0.24) 0px 4px 12px"
+              }[name] ?? "";
+            }
+          }
+        }
+      ]
+    }
+  ]
 };
 
 const reference = extractReferenceFromElement(createElementStub());
 const noChildrenReference = extractReferenceFromElement(createElementStub(), { childLimit: 0 });
 const iconReferenceDisabled = extractReferenceFromElement(createElementStub(), { includeIconDetails: false });
 const iconReferenceEnabled = extractReferenceFromElement(createElementStub(), { includeIconDetails: true });
+const stateReferenceDisabled = extractReferenceFromElement(createElementStub(), { includeStateStyles: false });
+const stateReferenceEnabled = extractReferenceFromElement(createElementStub(), { includeStateStyles: true });
 const selectedIconReference = extractReferenceFromElement(createIconElementStub(), { includeIconDetails: true });
 
 assert.equal(reference.page.url, "https://example.com/prototype");
@@ -401,4 +469,11 @@ assert.equal(selectedIconReference.element.iconDetails[0].type, "font-or-css");
 assert.equal(selectedIconReference.element.iconDetails[0].selector, "i.trend-up.iconfont");
 assert.equal(selectedIconReference.element.iconDetails[0].className, "trend-up iconfont");
 assert.equal(selectedIconReference.element.iconDetails[0].fontFamily, "iconfont");
+assert.equal(stateReferenceDisabled.element.stateStyles, undefined);
+assert.equal(stateReferenceEnabled.element.stateStyles.interactionRules.length, 1);
+assert.equal(stateReferenceEnabled.element.stateStyles.interactionRules[0].label, "鼠标移上去 hover");
+assert.equal(stateReferenceEnabled.element.stateStyles.interactionRules[0].styles["background-color"], "rgb(29, 78, 216)");
+assert.equal(stateReferenceEnabled.element.stateStyles.pseudoElements.length, 1);
+assert.equal(stateReferenceEnabled.element.stateStyles.pseudoElements[0].label, "前置装饰 ::before");
+assert.equal(stateReferenceEnabled.element.stateStyles.pseudoElements[0].styles.content, "\"*\"");
 assert.ok(STYLE_GROUPS.font.includes("fontFamily"));

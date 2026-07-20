@@ -58,6 +58,17 @@ UI Reference Copier 是一个 Chrome MV3 内容脚本插件，核心目标是把
 
 `content.js` 的「样式对比范围」会把这个参数传给单组对比和多组对比。多组对比通过 `groups.mjs` 的 `diffOptions` 继续传递给 `compareReferenceSets`。
 
+## Interaction State Capture
+
+交互状态采集默认关闭，由 `content.js` 的「采集交互状态」开关传入 `collector.mjs`。这个开关只保留一个入口，悬浮提示说明它适合 hover、点击、聚焦、禁用、红星和前后装饰等状态差异，避免普通用户面对太多选项。
+
+`collector.mjs` 会采集两类信息：
+
+- `:hover`、`:active`、`:focus`、`:focus-visible`、`:disabled`：从可访问 stylesheet 中读取匹配当前元素的 CSS 规则线索。content script 不能像 DevTools 一样强制伪类状态，所以这里不声称是 computed hover，而是输出规则线索。
+- `::before`、`::after`：通过 `window.getComputedStyle(element, pseudo)` 读取浏览器 computed style，用于表单红星、装饰线、伪元素图标等场景。
+
+`prompt.mjs` 会把采集结果输出到「交互状态样式」区块。`diff.mjs` 会对比参考和当前的状态规则、伪元素样式，并在逐元素差异里输出「交互状态样式差异」。
+
 ## Verification
 
 主要验证命令：

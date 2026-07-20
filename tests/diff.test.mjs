@@ -163,6 +163,47 @@ const current = [
   makeReference("h1.title", { x: 96, y: 126, width: 350, height: 52 }, { url: "http://localhost:3000", fontSize: "36px" })
 ];
 
+baseline[0].element.stateStyles = {
+  note: "hover/focus/active/disabled 来自匹配 CSS 规则线索；::before/::after 来自浏览器 computed style。",
+  interactionRules: [
+    {
+      state: ":hover",
+      label: "鼠标移上去 hover",
+      selector: "button.primary:hover",
+      styles: {
+        "background-color": "rgb(29, 78, 216)",
+        color: "rgb(255, 255, 255)"
+      }
+    }
+  ],
+  pseudoElements: [
+    {
+      state: "::before",
+      label: "前置装饰 ::before",
+      styles: {
+        content: "\"*\"",
+        color: "rgb(245, 63, 63)"
+      }
+    }
+  ]
+};
+
+current[0].element.stateStyles = {
+  note: "hover/focus/active/disabled 来自匹配 CSS 规则线索；::before/::after 来自浏览器 computed style。",
+  interactionRules: [
+    {
+      state: ":hover",
+      label: "鼠标移上去 hover",
+      selector: "button.primary:hover",
+      styles: {
+        "background-color": "rgb(59, 130, 246)",
+        color: "rgb(255, 255, 255)"
+      }
+    }
+  ],
+  pseudoElements: []
+};
+
 const diff = compareReferenceSets(baseline, current);
 const rootOnlyDiff = compareReferenceSets(baseline, current, { includeChildren: false });
 
@@ -207,6 +248,10 @@ assert.match(prompt, /var\.--n-fill-color: 参考 rgb\(32, 128, 240\) \/ 当前 
 assert.match(prompt, /图标差异/);
 assert.match(prompt, /viewBox: 参考 0 0 24 24 \/ 当前 0 0 20 20/);
 assert.match(prompt, /pathCount: 参考 2 \/ 当前 1/);
+assert.match(prompt, /交互状态样式差异/);
+assert.match(prompt, /鼠标移上去 hover/);
+assert.match(prompt, /background-color: 参考 rgb\(29, 78, 216\) \/ 当前 rgb\(59, 130, 246\)/);
+assert.match(prompt, /前置装饰 ::before.*当前实现缺少/);
 assert.match(prompt, /请根据这些差异调整当前项目/);
 assert.match(prompt, /## 结构状态：基本一致/);
 assert.doesNotMatch(prompt, /先停一下：结构可能不一致/);
